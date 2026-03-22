@@ -1,0 +1,92 @@
+% 04_macros.tex
+% Componentes Especiales para Instalación y Despliegue
+
+% 1. Formato para Comandos en línea y Rutas
+\newcommand{\comando}[1]{{\fontfamily{pcr}\fontsize{9}{10.8}\selectfont\colorbox{grisTecnico}{\texttt{#1}}}}
+
+% 2. COMPONENTES DE INSTALACIÓN
+
+% Advertencia: Prevenir pérdida de datos (Fondo rojo suave, icono peligro)
+\newtcolorbox{AvisoAdvertencia}{
+    colback=bgAdvertencia,
+    colframe=red!70!black,
+    boxrule=0.5pt,
+    leftrule=4pt,
+    arc=2pt,
+    title={\faRadiation\ \textbf{Advertencia}},
+    coltitle=black,
+    fonttitle=\sffamily,
+    attach title to upper=\par
+}
+
+% Alerta de Seguridad: Vulnerabilidades críticas (Fondo rojo)
+\newtcolorbox{AlertaSeguridad}{
+    colback=bgAdvertencia,
+    colframe=red!80!black,
+    boxrule=0.5pt,
+    leftrule=4pt,
+    arc=2pt,
+    title={\faShield*\ \textbf{Alerta de Seguridad}},
+    coltitle=black,
+    fonttitle=\sffamily,
+    attach title to upper=\par\vspace{0.2em}
+}
+
+% Punto de No Retorno (Fondo rojo suave, borde remarcado)
+\newtcolorbox{PuntoNoRetorno}{
+    colback=bgAdvertencia,
+    colframe=red!80!black,
+    boxrule=1.5pt,
+    leftrule=6pt,
+    arc=2pt,
+    title={\faRadiation\ \textbf{Punto de No Retorno}},
+    coltitle=black,
+    fonttitle=\sffamily,
+    attach title to upper=\par\vspace{0.2em}
+}
+
+% Nota Técnica general preservada
+\newtcolorbox{NotaTecnica}{
+    colback=white,
+    colframe=bordeNotaTecnica,
+    boxrule=1.2pt,
+    arc=2pt,
+    title={\faInfoCircle\ \textbf{Nota de Configuración}},
+    coltitle=bordeNotaTecnica,
+    fonttitle=\sffamily,
+    attach title to upper=\par\vspace{0.2em}
+}
+
+% 3. Formato de Checklist de Salida (Go-Live)
+\newlist{ChecklistGoLive}{itemize}{1}
+\setlist[ChecklistGoLive]{label=$\square$, leftmargin=*}
+
+% 4. Entorno de Tabla para Pre-requisitos (Hardware/Software)
+\newenvironment{TablaPrerequisitos}{
+    \renewcommand{\arraystretch}{1.5}
+    \vspace{0.5cm}
+    \noindent
+    \tabularx{\textwidth}{|>{\sffamily\bfseries\color{colorPrimario}}l|X|c|}
+    \hline
+    \rowcolor{headerTabla}
+    \sffamily\textbf{Componente} & \sffamily\textbf{Especificación / Versión Mínima} & \sffamily\textbf{Validado} \\
+    \hline
+}{
+    \endtabularx
+    \vspace{0.5cm}
+}
+
+% 5. Entorno original de APIs (Opcional, se mantiene por compatibilidad)
+\newenvironment{TablaAPI}{
+    \renewcommand{\arraystretch}{1.5}
+    \vspace{0.5cm}
+    \noindent
+    \tabularx{\textwidth}{|>{\ttfamily\color{colorPrimario}}l|l|X|>{\ttfamily\color{colorSecundario}}l|}
+    \hline
+    \rowcolor{headerTabla}
+    \sffamily\textbf{Parámetro} & \sffamily\textbf{Tipo} & \sffamily\textbf{Descripción} & \sffamily\textbf{Ejemplo} \\
+    \hline
+}{
+    \endtabularx
+    \vspace{0.5cm}
+}
