@@ -1,0 +1,473 @@
+% =============================================================================
+% CAPÍTULO 2 — REQUISITOS PREVIOS Y ENTORNO DE OPERACIÓN
+% =============================================================================
+\chapter[Requisitos y Entorno de Operación]{Requisitos Previos y Entorno de Operación}%
+\label{ch:requisitos}
+\resumenCapitulo{Antes de obtener el código fuente, el entorno de destino debe satisfacer
+un conjunto de requisitos de hardware, software, red y servicios externos. Este capítulo
+los enumera de forma exhaustiva y verificable, con los comandos exactos para comprobar
+cada versión y una matriz de puertos y dependencias. Completar y validar esta lista es la
+condición indispensable para que los capítulos siguientes se ejecuten sin incidencias.}
+
+La causa más habitual de un despliegue fallido no es un error en los procedimientos, sino
+un \textbf{entorno incompleto}: una versión de Java inferior a la requerida, un puerto
+ocupado o una clave de servicio externa ausente. Por ello, este capítulo debe tratarse
+como una \textbf{lista de verificación obligatoria}. Recorra cada apartado, ejecute los
+comandos de comprobación propuestos y marque la casilla correspondiente solo cuando el
+resultado coincida con lo esperado.\par
+
+% -----------------------------------------------------------------------------
+\section{Requisitos Mínimos y Recomendados de Hardware}%
+\label{sec:hardware}
+
+EthosHub es un único proceso JVM que, en producción, delega la persistencia y la
+autenticación en Supabase. Su huella de recursos es, por tanto, moderada y dominada por
+la JVM y —solo durante la construcción— por la compilación del \textit{frontend}. La
+tabla~\ref{tab:hw} distingue entre el perfil mínimo (evaluación o sandbox) y el
+recomendado (producción).\par
+
+\subsection[Procesamiento (CPU) y Memoria RAM]{Capacidad de Procesamiento (CPU) y Memoria RAM (Servidor de Despliegue)}%
+\label{subsec:cpu-ram}
+
+\begin{TablaPrerequisitos}
+CPU (mínimo) & 2 vCPU x86\_64 (2,0 GHz). Suficiente para arrancar el JAR y atender carga de evaluación. & $\square$ \\
+\hline
+CPU (recomendado) & 4 vCPU x86\_64. Acelera la fase de \texttt{npm run build} y la compilación Maven. & $\square$ \\
+\hline
+RAM (mínimo) & 2~GB libres. La JVM arranca con $\sim$512~MB; el resto cubre el sistema operativo. & $\square$ \\
+\hline
+RAM (recomendado) & 4~GB. Necesaria si se compila el \textit{frontend} en la misma máquina (Vite/Node es intensivo en memoria). & $\square$ \\
+\hline
+Arquitectura & x86\_64 (\texttt{amd64}). La imagen Tectonic del \texttt{Dockerfile} usa binarios \texttt{x86\_64-unknown-linux-musl}. & $\square$ \\
+\hline
+\end{TablaPrerequisitos}
+
+\begin{NotaConfiguracion}
+La fase de mayor consumo de memoria \textbf{no es la ejecución, sino la construcción}:
+\comando{tsc \&\& vite build} puede superar 1,5~GB de RAM transitoria. Si el servidor de
+producción dispone de poca memoria, compile el artefacto en una máquina de mayor
+capacidad y despliegue únicamente el JAR resultante con la opción \comando{--skip-fe}
+(apartado~\ref{sec:buildsh}).
+\end{NotaConfiguracion}
+
+\subsection{Requisitos de Almacenamiento en Disco y E/S}%
+\label{subsec:disco}
+
+El espacio requerido proviene de tres fuentes: las cachés de dependencias (Maven
+\comando{\textasciitilde/.m2} y npm \comando{node\_modules}), el artefacto resultante y,
+en despliegue con contenedor, la imagen Docker (que incluye el JRE y Tectonic). La
+tabla~\ref{tab:disco} desglosa el almacenamiento estimado.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{9}{10.8}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|c|X|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Elemento} & \textbf{Tamaño aprox.} & \textbf{Observación} \\
+\hline
+Caché Maven (\texttt{\textasciitilde/.m2}) & 350--500 MB & Se descarga una sola vez; reutilizable entre \textit{builds}. \\
+\hline
+\rowcolor{grisTecnico}
+\texttt{node\_modules} (frontend) & 400--600 MB & Generado por \texttt{npm ci}; no se incluye en el JAR. \\
+\hline
+Artefacto JAR & 60--90 MB & Incluye dependencias, la SPA compilada y el servidor embebido. \\
+\hline
+\rowcolor{grisTecnico}
+Imagen Docker & 450--700 MB & JRE 17 + Tectonic + caché LaTeX precalentada. \\
+\hline
+Total recomendado libre & \textbf{$\geq$ 5 GB} & Margen para logs, \texttt{uploads/} y reconstrucciones. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:disco}
+
+\par\vspace{0.2cm}%
+\label{tab:hw}
+En cuanto a E/S, no se requiere almacenamiento de alto rendimiento (SSD NVMe): la base de
+datos reside en Supabase y el JAR solo realiza escrituras puntuales en
+\ruta{ethoshubB/uploads/} y en el archivo de log. Un disco estándar es suficiente para
+producción.\par
+
+% -----------------------------------------------------------------------------
+\section{Requisitos de Software del Sistema Operativo y Base}%
+\label{sec:software}
+
+EthosHub se desarrolla y despliega sobre \textbf{Linux} (se usó Ubuntu/Debian como
+referencia), aunque el JAR es portable a cualquier sistema con JVM. Las herramientas de
+la tabla~\ref{tab:software} deben instalarse y figurar en el \comando{PATH} del usuario
+que ejecutará la construcción. Cada apartado siguiente indica el comando exacto para
+verificar la versión instalada.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|l|X|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Herramienta} & \textbf{Versión} & \textbf{Función en la instalación} \\
+\hline
+JDK & 17+ & Compilar y ejecutar el backend Spring Boot. \\
+\hline
+\rowcolor{grisTecnico}
+Maven & 3.9+ & Empaquetar el JAR (o usar el \textit{wrapper} \texttt{./mvnw}). \\
+\hline
+Node.js & 20+ (compatible 25) & Compilar la SPA (\texttt{tsc} + Vite). \\
+\hline
+\rowcolor{grisTecnico}
+npm & 10+ & Gestor de paquetes del \textit{frontend} (\texttt{npm ci}). \\
+\hline
+Docker Engine & 24+ & Construir y ejecutar la imagen de contenedor. \\
+\hline
+\rowcolor{grisTecnico}
+Docker Compose & v2+ & Orquestar el despliegue (\texttt{docker compose up}). \\
+\hline
+Git & 2.30+ & Clonar los repositorios de código fuente. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:software}
+
+\subsection[Entorno de Ejecución de Java (JDK 17)]{Entorno de Ejecución de Java (Java Development Kit -- JDK 17)}%
+\label{subsec:jdk}
+
+El backend declara \comando{<java.version>17</java.version>} en su \comando{pom.xml} y el
+\comando{Dockerfile} se basa en \comando{eclipse-temurin:17}. Una versión inferior
+impedirá la compilación. Si Java no está instalado, use el gestor de paquetes de su
+distribución:\par
+
+\begin{lstlisting}[language=bash]
+# Ubuntu / Debian
+$ sudo apt update && sudo apt install -y openjdk-17-jdk
+
+# Fedora / RHEL
+$ sudo dnf install -y java-17-openjdk-devel
+
+# Verificacion (la primera cifra debe ser 17 o superior)
+$ java -version
+openjdk version "17.0.11" 2024-04-16
+OpenJDK Runtime Environment Temurin-17.0.11+9 (build 17.0.11+9)
+$ javac -version
+javac 17.0.11
+\end{lstlisting}
+
+\begin{VerificacionOK}
+La primera cifra de la versión debe ser \textbf{17 o superior}. El script
+\comando{build.sh} aborta explícitamente con el mensaje \comando{Se requiere JDK 17+} si
+detecta una versión menor. Si gestiona varias versiones de Java, use \comando{sdk use
+java 17.x} (SDKMAN) o ajuste \comando{JAVA\_HOME} antes de construir.
+\end{VerificacionOK}
+
+\subsection[Motor Node.js y Gestor de Paquetes]{Motor de Ejecución Node.js (v20+ / v25 compatible) y Gestor de Paquetes}%
+\label{subsec:node}
+
+El \textit{frontend} se compila con Node.js. El proyecto se valida con Node~20 LTS y es
+compatible con la línea 25 (el \comando{package.json} declara
+\comando{@types/node\textasciicircum25}). Se recomienda instalarlo mediante NodeSource o
+\textit{nvm} para fijar la versión LTS:\par
+
+\begin{lstlisting}[language=bash]
+# Opcion A: NodeSource (Ubuntu/Debian) -- Node 20 LTS
+$ curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+$ sudo apt install -y nodejs
+
+# Opcion B: nvm (cualquier distribucion)
+$ nvm install 20 && nvm use 20
+
+# Verificacion
+$ node -v
+v20.18.0
+$ npm -v
+10.8.2
+\end{lstlisting}
+
+\begin{AvisoPrecaucion}
+La construcción usa \comando{npm ci} (no \comando{npm install}): este comando exige la
+presencia de \comando{package-lock.json} y reproduce \textbf{exactamente} el árbol de
+dependencias bloqueado, garantizando \textit{builds} deterministas. No elimine el
+\textit{lockfile}. El repositorio también incluye \comando{pnpm-lock.yaml}, pero el
+\textit{pipeline} oficial usa npm.
+\end{AvisoPrecaucion}
+
+\subsection{Motor de Contenedores (Docker Engine y Docker Compose)}%
+\label{subsec:docker}
+
+El despliegue de producción recomendado es por contenedor. Verifique que el demonio de
+Docker está activo y que Compose v2 está disponible como subcomando. La vía oficial es el
+\textit{script} de conveniencia o el repositorio de Docker:\par
+
+\begin{lstlisting}[language=bash]
+# Instalacion (script oficial de conveniencia)
+$ curl -fsSL https://get.docker.com | sudo sh
+# Permitir a su usuario usar Docker sin sudo (requiere re-login)
+$ sudo usermod -aG docker "$USER"
+
+# Verificacion
+$ docker --version
+Docker version 24.0.7, build afdd53b
+
+$ docker compose version
+Docker Compose version v2.21.0
+
+$ docker info >/dev/null 2>&1 && echo "Demonio Docker activo"
+Demonio Docker activo
+\end{lstlisting}
+
+\begin{NotaConfiguracion}
+Use la sintaxis moderna \comando{docker compose} (con espacio, plugin v2) y no el antiguo
+binario \comando{docker-compose} (con guion). El \comando{docker-compose.yml} provisto es
+compatible con ambos, pero los comandos de este manual asumen el plugin v2. Si Docker no
+está disponible, el capítulo~\ref{ch:despliegue} ofrece la alternativa de ejecución
+directa del JAR.
+\end{NotaConfiguracion}
+
+\subsection[Base de Datos (PostgreSQL v15+)]{Sistema de Gestión de Bases de Datos (PostgreSQL v15+)}%
+\label{subsec:postgres}
+
+EthosHub usa PostgreSQL 15 o superior, pero —y esto es crucial— \textbf{no se instala un
+servidor PostgreSQL local en producción}. La base de datos la provee Supabase como
+servicio gestionado. PostgreSQL aparece en la instalación únicamente en dos contextos:\par
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Cliente de línea de comandos (\comando{psql}), opcional.} Útil para
+    aplicar manualmente migraciones SQL o inspeccionar el esquema \comando{core} contra
+    Supabase. No es obligatorio.
+    \item \textbf{Testcontainers (automático).} Las pruebas de integración levantan un
+    contenedor PostgreSQL efímero; esto exige Docker, no una instalación de PostgreSQL.
+    Se detalla en el apartado~\ref{sec:testcontainers}.
+\end{itemize}
+
+Si opta por instalar únicamente el cliente \comando{psql} (sin servidor) para aplicar
+migraciones contra Supabase, basta con el paquete \comando{postgresql-client}:\par
+
+\begin{lstlisting}[language=bash]
+# Ubuntu / Debian -- solo el cliente de linea de comandos
+$ sudo apt install -y postgresql-client
+# Fedora / RHEL
+$ sudo dnf install -y postgresql
+
+# Verificacion
+$ psql --version
+psql (PostgreSQL) 15.6
+\end{lstlisting}
+
+% -----------------------------------------------------------------------------
+\section{Requisitos de Conectividad y Red}%
+\label{sec:red}
+
+La topología de red difiere entre desarrollo y producción. La figura~\ref{fig:topologia}
+contrasta ambos escenarios: en producción, un único puerto (8080) expone el monolito; en
+desarrollo, el navegador habla con Vite (3000), que reenvía las llamadas de API al
+backend (8080) mediante un \textit{proxy}.\par
+
+\vspace{0.3cm}
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[node distance=0.9cm and 1.6cm, every node/.style={font=\sffamily\scriptsize}]
+    % Producción
+    \node[font=\sffamily\footnotesize\bfseries\color{colorPrimario}] (tp) at (0,2.4) {Producción (monolito)};
+    \node[c4persona, minimum width=2.2cm, minimum height=0.9cm] (nav1) at (-2.6,1.0) {Navegador};
+    \node[c4sistema, minimum width=2.6cm, minimum height=0.9cm] (mono) at (1.6,1.0) {JAR :8080\\\scriptsize SPA + API};
+    \draw[c4flecha] (nav1) -- node[c4etiqueta, above]{HTTPS :8080} (mono);
+
+    % Desarrollo
+    \node[font=\sffamily\footnotesize\bfseries\color{colorPrimario}] (td) at (0,-0.6) {Desarrollo (proxy Vite)};
+    \node[c4persona, minimum width=2.0cm, minimum height=0.9cm] (nav2) at (-3.4,-2.0) {Navegador};
+    \node[c4contenedor, minimum width=2.0cm, minimum height=0.9cm] (vite) at (-0.4,-2.0) {Vite :3000};
+    \node[c4sistema, minimum width=2.0cm, minimum height=0.9cm] (be) at (3.0,-2.0) {Backend :8080};
+    \draw[c4flecha] (nav2) -- node[c4etiqueta, above]{:3000} (vite);
+    \draw[c4flecha] (vite) -- node[c4etiqueta, above]{proxy /api} (be);
+\end{tikzpicture}
+\caption{Topología de red en producción (un puerto) frente a desarrollo (proxy de Vite hacia el backend).}%
+\label{fig:topologia}
+\end{figure}
+
+\subsection[Puertos y Matriz de Exposición]{Puertos del Sistema y Matriz de Exposición (8080, 3000, 5432)}%
+\label{subsec:puertos}
+
+La tabla~\ref{tab:puertos} documenta la matriz de puertos. En producción solo el puerto
+8080 debe estar accesible desde el exterior; los demás son internos o exclusivos de
+desarrollo.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|c|>{\bfseries}l|c|X|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Puerto} & \textbf{Servicio} & \textbf{Entorno} & \textbf{Exposición recomendada} \\
+\hline
+8080 & Backend / Monolito (HTTP) & Ambos & \textbf{Pública} (tras proxy TLS en producción). \\
+\hline
+\rowcolor{grisTecnico}
+3000 & Servidor de desarrollo Vite & Desarrollo & Local; nunca expuesto en producción. \\
+\hline
+5432 & PostgreSQL (Supabase \textit{pooler}) & Ambos & Saliente hacia Supabase; no se abre localmente. \\
+\hline
+\rowcolor{grisTecnico}
+443 & HTTPS hacia Supabase/Gemini/Drive & Ambos & Saliente; imprescindible para servicios externos. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:puertos}
+
+\par\vspace{0.2cm}
+Verifique que el puerto 8080 está libre antes de arrancar el servicio. Un puerto ocupado
+produce el error \\ \comando{Port 8080 was already in use}, tratado en el
+capítulo~\ref{ch:troubleshooting}:\par
+
+\begin{lstlisting}[language=bash]
+$ ss -ltnp | grep ':8080' || echo "Puerto 8080 libre"
+Puerto 8080 libre
+\end{lstlisting}
+
+\begin{AlertaSeguridad}
+El puerto 8080 sirve HTTP plano. En producción \textbf{nunca} lo exponga directamente a
+Internet: colóquelo detrás de un proxy inverso (Nginx, Traefik o el \textit{ingress} de
+la plataforma) que termine TLS y reenvíe a 8080. Servir la PWA sobre HTTP sin cifrar
+desencadena las restricciones de cámara/micrófono del capítulo~\ref{ch:seguridad}.
+\end{AlertaSeguridad}
+
+\subsection[Proxy Inverso Local de Desarrollo (Vite)]{Configuración del Proxy Inverso Local en Entornos de Desarrollo (Vite Proxy)}%
+\label{subsec:viteproxy}
+
+En desarrollo no existe el monolito: el \textit{frontend} y el backend son procesos
+separados. Para evitar problemas de \textit{Cross-Origin}, el servidor de Vite actúa como
+\textbf{proxy inverso local}, reenviando al backend toda petición cuya ruta comience por
+\comando{/api}, \comando{/auth} o \comando{/v1}. Esta configuración vive en
+\comando{vite.config.ts} y es la razón por la que en desarrollo no hace falta definir
+\comando{VITE\_API\_URL}.\par
+
+\begin{lstlisting}[language=bash]
+// vite.config.ts (extracto)
+server: {
+  port: 3000,
+  proxy: {
+    '/api':  { target: 'http://localhost:8080', changeOrigin: true, secure: false },
+    '/auth': { target: 'http://localhost:8080', changeOrigin: true, secure: false },
+    '/v1':   { target: 'http://localhost:8080', changeOrigin: true, secure: false },
+  },
+}
+\end{lstlisting}
+
+\begin{NotaConfiguracion}
+La lista \comando{allowedHosts} de \comando{vite.config.ts} ya incluye el dominio
+institucional \comando{bytebusters.tis.cs.umss.edu.bo}. Si sirve el entorno de desarrollo
+bajo otro \textit{host} (por ejemplo, una IP de red local), añádalo a esa lista o Vite
+rechazará la petición con un error de \textit{host} no permitido.
+\end{NotaConfiguracion}
+
+\subsubsection{Matriz de egreso de red (\textit{allowlist} de dominios externos)}
+En entornos con cortafuegos de salida restrictivo, el servidor debe poder alcanzar los
+dominios de los servicios externos. La tabla~\ref{tab:egreso} enumera el tráfico
+\textbf{saliente} que debe autorizarse; sin él, el sistema arranca pero falla al
+autenticar, persistir o invocar la IA.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.5}{10.2}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\ttfamily\raggedright\arraybackslash}p{4.6cm}|c|X|}
+\hline
+\rowcolor{headerTabla}
+\sffamily\textbf{Destino} & \sffamily\textbf{Puerto} & \sffamily\textbf{Propósito} \\
+\hline
+*.supabase.co & 443 & Auth, RPCs y almacenamiento de Supabase. \\
+\hline
+\rowcolor{grisTecnico}
+<ref>.supabase.co (pooler) & 5432 & Conexión JDBC a PostgreSQL. \\
+\hline
+\seqsplit{generativelanguage.googleapis.com} & 443 & API de Google Gemini (IA). \\
+\hline
+\rowcolor{grisTecnico}
+www.googleapis.com & 443 & Google Drive / Picker. \\
+\hline
+smtp.gmail.com & 587 & Envío de correos (OTP, notificaciones). \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:egreso}
+
+\begin{AvisoPrecaucion}
+Un fallo intermitente de autenticación o de IA en un entorno por lo demás correcto suele
+deberse a un \textbf{cortafuegos de egreso} que bloquea uno de estos destinos. Antes de
+sospechar de la configuración de la aplicación, confirme con \comando{curl -I
+https://<ref>.supabase.co} que el servidor alcanza los servicios externos.
+\end{AvisoPrecaucion}
+
+% -----------------------------------------------------------------------------
+\section{Dependencias de Servicios Externos Clave}%
+\label{sec:servicios-externos}
+
+EthosHub delega capacidades críticas en tres servicios en la nube. Sin las credenciales
+correspondientes, partes del sistema no funcionarán. La tabla~\ref{tab:externos} resume
+estas dependencias; los apartados siguientes detallan cómo obtener cada credencial.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|X|c|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Servicio} & \textbf{Capacidad que provee} & \textbf{¿Crítico?} \\
+\hline
+Supabase Cloud & Base de datos PostgreSQL, autenticación (JWT) y Realtime. & Sí \\
+\hline
+\rowcolor{grisTecnico}
+Google Gemini API & Asistente de IA del CV Studio e \textit{insights} de reclutamiento. & Parcial \\
+\hline
+Google Drive / Picker API & Importación de archivos del usuario desde Google Drive. & Opcional \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:externos}
+
+\subsection[Persistencia y Autenticación: Supabase]{Infraestructura de Persistencia y Autenticación: Supabase Cloud}%
+\label{subsec:supabase}
+
+Supabase es la dependencia \textbf{más crítica}: sin ella, ni la autenticación ni la
+persistencia funcionan. Del panel del proyecto Supabase (\comando{Project Settings $\to$
+API}) debe obtener tres valores y el \textit{endpoint} de JWKS:\par
+
+\begin{itemize}[noitemsep]
+    \item \comando{SUPABASE\_URL} — URL del proyecto (p.\,ej. \ruta{https://rhtckjqndnulvytloxfp.supabase.co}).
+    \item \comando{SUPABASE\_ANON\_KEY} — clave pública, protegida por RLS; se usa también en el \textit{frontend}.
+    \item \comando{SUPABASE\_SERVICE\_ROLE\_KEY} — clave de administración; \textbf{secreta}, solo en el backend.
+    \item \textit{JWKS URI} — \ruta{https://<ref>.supabase.co/auth/v1/.well-known/jwks.json}, para validar firmas JWT.
+\end{itemize}
+
+\begin{AlertaSeguridad}
+La \comando{SERVICE\_ROLE\_KEY} otorga acceso total a la base de datos, saltándose las
+políticas RLS. \textbf{Jamás} debe incluirse en variables \comando{VITE\_*} ni llegar al
+navegador. Su almacenamiento seguro es objeto del apartado~\ref{subsec:servicerole}.
+\end{AlertaSeguridad}
+
+\subsection[Inteligencia Artificial: Google Gemini]{Proveedor de Servicios de Inteligencia Artificial: Google Gemini API}%
+\label{subsec:gemini}
+
+La clave \comando{GEMINI\_API\_KEY} se obtiene en \textit{Google AI Studio} y habilita
+dos funciones: el asistente del CV Studio (\ruta{/v1/cv-documents/ai-assist}) y los
+\textit{insights} de reclutamiento (\ruta{/v1/recruiter/ai-insights}). Su ausencia no
+impide arrancar el sistema, pero esos \textit{endpoints} devolverán error; el manejo de
+esta degradación se trata en el apartado~\ref{sec:degradacion-ia}.\par
+
+\subsection[Integraciones: Google Drive y Picker]{Integraciones de Terceros: Google Drive API \& Google Picker API}%
+\label{subsec:drive}
+
+La importación de archivos desde Google Drive requiere dos credenciales públicas de
+cliente: \comando{VITE\_GOOGLE\_CLIENT\_ID} (OAuth 2.0, tipo «Aplicación web») y
+\comando{VITE\_GOOGLE\_API\_KEY}. Se crean en \textit{Google Cloud Console} habilitando
+las APIs \textbf{Google Picker API} y \textbf{Google Drive API}. Es la dependencia menos
+crítica: su ausencia solo deshabilita el botón «Añadir desde Drive».\par
+
+\begin{AvisoPrecaucion}
+El \comando{VITE\_GOOGLE\_CLIENT\_ID} exige declarar los \textbf{orígenes autorizados de
+JavaScript} en Google Cloud Console (p.\,ej. la URL de producción del monolito). Si el
+origen desde el que se sirve la aplicación no figura en esa lista, el \textit{Picker} de
+Drive fallará silenciosamente. Recuerde incluir tanto el dominio de producción como, si
+procede, el de evaluación.
+\end{AvisoPrecaucion}
+
+\par\vspace{0.2cm}
+Con el entorno verificado y las credenciales en mano, el capítulo~\ref{ch:preparacion}
+detalla cómo obtener el código fuente y materializar estos valores en archivos de
+configuración.\par

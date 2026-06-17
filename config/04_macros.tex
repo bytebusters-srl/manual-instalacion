@@ -1,92 +1,267 @@
 % 04_macros.tex
-% Componentes Especiales para Instalación y Despliegue
+% Componentes Especiales para Instalación y Despliegue (Estándar ISO 15289)
 
-% 1. Formato para Comandos en línea y Rutas
-\newcommand{\comando}[1]{{\fontfamily{pcr}\fontsize{9}{10.8}\selectfont\colorbox{grisTecnico}{\texttt{#1}}}}
+% =============================================================================
+% 1. FORMATO PARA COMANDOS, RUTAS Y CADENAS LARGAS
+% =============================================================================
 
-% 2. COMPONENTES DE INSTALACIÓN
+% Comando / valor en línea (fondo gris). Cada palabra se encajona por separado
+% y se unen con espacios quebrables, de modo que un comando o ruta de menú largo
+% pueda partirse entre líneas en lugar de invadir el margen (overfull).
+\makeatletter
+\newcommand{\comando@chip}[1]{{\setlength{\fboxsep}{2pt}\fontfamily{pcr}\fontsize{9}{10.8}\selectfont\colorbox{grisTecnico}{\texttt{#1}}}}
+\def\comando@loop#1 #2\comando@end{%
+  \comando@chip{#1}%
+  \def\comando@rest{#2}%
+  \ifx\comando@rest\@empty\else\space\comando@loop#2\comando@end\fi}
+\DeclareRobustCommand{\comando}[1]{\comando@loop#1 \comando@end}
+\makeatother
 
-% Advertencia: Prevenir pérdida de datos (Fondo rojo suave, icono peligro)
+% Rutas, endpoints y rutas de archivo con quiebre automático de línea.
+\newcommand{\ruta}[1]{{\ttfamily\fontsize{8.5}{10.2}\selectfont\rutaBreak{#1}}}
+\newcommand{\rutaBreak}[1]{\seqsplit{#1}}
+
+% \dir: direcciones/banderas largas (chrome://flags/#..., listas de orígenes)
+% que deben romper de forma natural en los separadores sin desbordar el margen.
+% Usa \nolinkurl (hyperref + xurl): admite '#' y '_' sin escapar y quiebra en
+% '/', ':', '.', '-', etc. Monospace, sin convertirse en hiperenlace.
+\newcommand{\dir}[1]{{\fontsize{8.5}{10.2}\selectfont\nolinkurl{#1}}}
+
+% Quiebre lógico tras separadores habituales (/ _ - . @ :) sin perder caracteres.
+\makeatletter
+\newcommand{\pathbreak}[1]{\texttt{\@pathbreak#1\relax}}
+\def\@pathbreak#1{%
+  \ifx#1\relax\else
+    \ifx#1/\,\discretionary{}{}{}/\discretionary{}{}{}%
+    \else\ifx#1_\_\discretionary{}{}{}%
+    \else\ifx#1-#1\discretionary{}{}{}%
+    \else\ifx#1.#1\discretionary{}{}{}%
+    \else\ifx#1:#1\discretionary{}{}{}%
+    \else#1\fi\fi\fi\fi\fi
+    \expandafter\@pathbreak
+  \fi}
+\makeatother
+
+% Tipos de columna con CENTRADO VERTICAL del contenido en cada celda.
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}m{#1}}  % izq. + centro vert.
+\newcolumntype{C}[1]{>{\centering\arraybackslash}m{#1}}    % centro + centro vert.
+\newcolumntype{R}[1]{>{\raggedleft\arraybackslash}m{#1}}   % der. + centro vert.
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+\newcommand{\celdaCentro}[1]{\multicolumn{1}{c}{#1}}
+
+% =============================================================================
+% 2. CAJAS DE AVISO (semántica de despliegue)
+% =============================================================================
+
+% Nota: consejos de productividad (fondo azul claro)
+\newtcolorbox{AvisoNota}{
+    colback=bgNota, colframe=bgNota!80!black,
+    boxrule=0.5pt, leftrule=4pt, arc=2pt,
+    title={\faInfoCircle\ \textbf{Nota}}, coltitle=black,
+    fonttitle=\sffamily, attach title to upper=\quad
+}
+
+% Precaución: evitar errores operacionales (borde amarillo)
+\newtcolorbox{AvisoPrecaucion}{
+    colback=white, colframe=colorAcento,
+    boxrule=1.5pt, arc=2pt, fontupper=\bfseries,
+    title={\faExclamationTriangle\ \textbf{Precaución}}, coltitle=black,
+    fonttitle=\sffamily, attach title to upper=\par
+}
+
+% Advertencia: prevenir pérdida de datos (fondo rojo suave)
 \newtcolorbox{AvisoAdvertencia}{
-    colback=bgAdvertencia,
-    colframe=red!70!black,
-    boxrule=0.5pt,
-    leftrule=4pt,
-    arc=2pt,
-    title={\faRadiation\ \textbf{Advertencia}},
-    coltitle=black,
-    fonttitle=\sffamily,
-    attach title to upper=\par
+    colback=bgAdvertencia, colframe=red!70!black,
+    boxrule=0.5pt, leftrule=4pt, arc=2pt,
+    title={\faRadiation\ \textbf{Advertencia}}, coltitle=black,
+    fonttitle=\sffamily, attach title to upper=\par
 }
 
-% Alerta de Seguridad: Vulnerabilidades críticas (Fondo rojo)
+% Alerta de Seguridad: vulnerabilidades críticas
 \newtcolorbox{AlertaSeguridad}{
-    colback=bgAdvertencia,
-    colframe=red!80!black,
-    boxrule=0.5pt,
-    leftrule=4pt,
-    arc=2pt,
-    title={\faShield*\ \textbf{Alerta de Seguridad}},
-    coltitle=black,
-    fonttitle=\sffamily,
-    attach title to upper=\par\vspace{0.2em}
+    colback=bgAdvertencia, colframe=red!80!black,
+    boxrule=0.5pt, leftrule=4pt, arc=2pt,
+    title={\faShield*\ \textbf{Alerta de Seguridad}}, coltitle=black,
+    fonttitle=\sffamily, attach title to upper=\par\vspace{0.2em}
 }
 
-% Punto de No Retorno (Fondo rojo suave, borde remarcado)
+% Punto de No Retorno (operación irreversible)
 \newtcolorbox{PuntoNoRetorno}{
-    colback=bgAdvertencia,
-    colframe=red!80!black,
-    boxrule=1.5pt,
-    leftrule=6pt,
-    arc=2pt,
-    title={\faRadiation\ \textbf{Punto de No Retorno}},
-    coltitle=black,
-    fonttitle=\sffamily,
-    attach title to upper=\par\vspace{0.2em}
+    colback=bgAdvertencia, colframe=red!80!black,
+    boxrule=1.5pt, leftrule=6pt, arc=2pt,
+    title={\faRadiation\ \textbf{Punto de No Retorno}}, coltitle=black,
+    fonttitle=\sffamily, attach title to upper=\par\vspace{0.2em}
 }
 
-% Nota Técnica general preservada
-\newtcolorbox{NotaTecnica}{
-    colback=white,
-    colframe=bordeNotaTecnica,
-    boxrule=1.2pt,
-    arc=2pt,
-    title={\faInfoCircle\ \textbf{Nota de Configuración}},
-    coltitle=bordeNotaTecnica,
-    fonttitle=\sffamily,
-    attach title to upper=\par\vspace{0.2em}
+% Nota de Configuración (dependencias / efectos secundarios)
+\newtcolorbox{NotaConfiguracion}{
+    colback=white, colframe=bordeNotaTecnica,
+    boxrule=1.2pt, arc=2pt,
+    title={\faInfoCircle\ \textbf{Nota de Configuración}}, coltitle=bordeNotaTecnica,
+    fonttitle=\sffamily, attach title to upper=\par\vspace{0.2em}
 }
 
-% 3. Formato de Checklist de Salida (Go-Live)
+% Verificación correcta (resultado esperado tras un paso)
+\newtcolorbox{VerificacionOK}{
+    colback=bgExito, colframe=colorSecundario!80!black,
+    boxrule=0.5pt, leftrule=4pt, arc=2pt,
+    title={\faCheckCircle\ \textbf{Resultado Esperado}}, coltitle=black,
+    fonttitle=\sffamily, attach title to upper=\par\vspace{0.2em}
+}
+
+% =============================================================================
+% 3. LISTAS Y CHECKLISTS
+% =============================================================================
+\newlist{checklist}{itemize}{1}
+\setlist[checklist]{label=$\square$, leftmargin=*, noitemsep}
+
 \newlist{ChecklistGoLive}{itemize}{1}
-\setlist[ChecklistGoLive]{label=$\square$, leftmargin=*}
+\setlist[ChecklistGoLive]{label=$\square$, leftmargin=*, noitemsep}
 
-% 4. Entorno de Tabla para Pre-requisitos (Hardware/Software)
+% =============================================================================
+% 4. ENTORNOS DE TABLA REUTILIZABLES
+% =============================================================================
+
+% 4a. Pre-requisitos (Hardware/Software) con casilla de validación
 \newenvironment{TablaPrerequisitos}{
     \renewcommand{\arraystretch}{1.5}
-    \vspace{0.5cm}
-    \noindent
-    \tabularx{\textwidth}{|>{\sffamily\bfseries\color{colorPrimario}}l|X|c|}
-    \hline
-    \rowcolor{headerTabla}
+    \vspace{0.3cm}\noindent
+    \fontsize{9}{10.8}\selectfont
+    \tabularx{\dimexpr\textwidth-2pt\relax}{|>{\sffamily\bfseries\color{colorPrimario}}l|Y|c|}
+    \hline\rowcolor{headerTabla}
     \sffamily\textbf{Componente} & \sffamily\textbf{Especificación / Versión Mínima} & \sffamily\textbf{Validado} \\
     \hline
 }{
     \endtabularx
-    \vspace{0.5cm}
+    \vspace{0.3cm}
 }
 
-% 5. Entorno original de APIs (Opcional, se mantiene por compatibilidad)
-\newenvironment{TablaAPI}{
-    \renewcommand{\arraystretch}{1.5}
-    \vspace{0.5cm}
-    \noindent
-    \tabularx{\textwidth}{|>{\ttfamily\color{colorPrimario}}l|l|X|>{\ttfamily\color{colorSecundario}}l|}
-    \hline
-    \rowcolor{headerTabla}
-    \sffamily\textbf{Parámetro} & \sffamily\textbf{Tipo} & \sffamily\textbf{Descripción} & \sffamily\textbf{Ejemplo} \\
+% 4b. Matriz de Variables de Entorno
+\newenvironment{TablaVariables}{
+    \renewcommand{\arraystretch}{1.4}
+    \vspace{0.3cm}\noindent
+    \fontsize{8.5}{10.2}\selectfont\sffamily
+    \tabularx{\dimexpr\textwidth-2pt\relax}{|>{\ttfamily\bfseries\color{colorPrimario}\raggedright\arraybackslash}p{4.2cm}|Y|c|}
+    \hline\rowcolor{headerTabla}
+    \sffamily\textbf{Variable} & \sffamily\textbf{Descripción y origen del valor} & \sffamily\textbf{Oblig.} \\
     \hline
 }{
     \endtabularx
-    \vspace{0.5cm}
+    \vspace{0.3cm}
+}
+
+% 4c. Tabla genérica de errores (Troubleshooting), multipágina
+\newenvironment{TablaErrores}{
+    \renewcommand{\arraystretch}{1.35}
+    \fontsize{8.5}{10.2}\selectfont\sffamily
+    \setlength{\tabcolsep}{4pt}
+    \begin{longtable}{|>{\raggedright\arraybackslash}p{3.0cm}|>{\raggedright\arraybackslash}p{3.6cm}|>{\raggedright\arraybackslash}p{8.2cm}|}
+    \hline\rowcolor{headerTabla}
+    \sffamily\textbf{Síntoma} & \sffamily\textbf{Causa probable} & \sffamily\textbf{Solución} \\
+    \hline\endfirsthead
+    \hline\rowcolor{headerTabla}
+    \sffamily\textbf{Síntoma} & \sffamily\textbf{Causa probable} & \sffamily\textbf{Solución} \\
+    \hline\endhead
+    \hline\multicolumn{3}{r}{\sffamily\tiny\color{grisISO}\textit{continúa en la página siguiente}}\\
+    \endfoot\hline\endlastfoot
+}{
+    \end{longtable}
+}
+
+% 4d. Tabla API (parámetros / endpoints)
+\newenvironment{TablaAPI}{
+    \renewcommand{\arraystretch}{1.4}
+    \vspace{0.3cm}\noindent
+    \fontsize{8.5}{10.2}\selectfont
+    \tabularx{\dimexpr\textwidth-2pt\relax}{|>{\ttfamily\color{colorPrimario}}l|l|Y|}
+    \hline\rowcolor{headerTabla}
+    \sffamily\textbf{Endpoint / Parámetro} & \sffamily\textbf{Método} & \sffamily\textbf{Descripción} \\
+    \hline
+}{
+    \endtabularx
+    \vspace{0.3cm}
+}
+
+% =============================================================================
+% 5. BLOQUES DE CÓDIGO Y TERMINAL (Bash, YAML, ENV, JSON, SQL)
+% =============================================================================
+\lstdefinelanguage{envfile}{
+    morekeywords={},
+    comment=[l]{\#},
+    morestring=[b]",
+    sensitive=true
+}
+\lstdefinestyle{ethosCode}{
+    basicstyle=\ttfamily\fontsize{8}{9.6}\selectfont,
+    extendedchars=true,
+    backgroundcolor=\color{grisTecnico},
+    keywordstyle=\color{codeKeyword}\bfseries,
+    commentstyle=\color{codeComment}\itshape,
+    stringstyle=\color{codeString},
+    numbers=left, numberstyle=\tiny\color{grisISO}, numbersep=8pt,
+    frame=single, framesep=5pt, rulecolor=\color{grisISO!50},
+    breaklines=true, breakatwhitespace=false, showstringspaces=false,
+    breakindent=0pt, postbreak=\mbox{\textcolor{grisISO}{$\hookrightarrow$}\space},
+    tabsize=2, captionpos=b, aboveskip=0.6em, belowskip=0.6em,
+    literate=%
+        {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'\i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+        {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+        {ñ}{{\~n}}1 {Ñ}{{\~N}}1 {¿}{{?`}}1 {¡}{{!`}}1 {€}{{\euro}}1
+        {—}{{-{}-}}2 {–}{{-}}1 {«}{{<{}<}}2 {»}{{>{}>}}2
+        {─}{{-}}1 {│}{{|}}1 {•}{{*}}1 {→}{{->}}2 {✓}{{[OK]}}4 {✗}{{[X]}}3
+}
+\lstset{style=ethosCode}
+
+% Atajo: bloque de terminal etiquetado
+\newcommand{\terminal}[1]{\lstinline[basicstyle=\ttfamily\small]|#1|}
+
+% =============================================================================
+% 6. ESTILOS TikZ (topologías de red, flujos de despliegue, mockups)
+% =============================================================================
+\tikzset{
+    c4persona/.style={
+        rectangle, rounded corners=3pt, draw=c4Persona!80!black, very thick,
+        fill=c4Persona, text=white, align=center, font=\sffamily\footnotesize\bfseries,
+        minimum width=2.6cm, minimum height=1.2cm, inner sep=4pt},
+    c4sistema/.style={
+        rectangle, rounded corners=4pt, draw=c4Sistema!80!black, very thick,
+        fill=c4Sistema, text=white, align=center, font=\sffamily\footnotesize\bfseries,
+        minimum width=3.2cm, minimum height=1.4cm, inner sep=5pt},
+    c4contenedor/.style={
+        rectangle, rounded corners=4pt, draw=c4Contenedor!70!black, very thick,
+        fill=c4Contenedor, text=white, align=center, font=\sffamily\scriptsize\bfseries,
+        minimum width=3.0cm, minimum height=1.3cm, inner sep=4pt},
+    c4componente/.style={
+        rectangle, rounded corners=3pt, draw=c4Componente!70!black, thick,
+        fill=c4Componente, text=black, align=center, font=\sffamily\scriptsize,
+        minimum width=2.8cm, minimum height=1.0cm, inner sep=3pt},
+    c4externo/.style={
+        rectangle, rounded corners=4pt, draw=c4Externo!70!black, very thick,
+        fill=c4Externo, text=white, align=center, font=\sffamily\footnotesize\bfseries,
+        minimum width=2.8cm, minimum height=1.2cm, inner sep=4pt},
+    c4datos/.style={
+        cylinder, shape border rotate=90, aspect=0.25, draw=c4Datos!70!black, very thick,
+        fill=c4Datos, text=white, align=center, font=\sffamily\scriptsize\bfseries,
+        minimum width=2.6cm, minimum height=1.4cm, inner sep=4pt},
+    c4limite/.style={
+        rectangle, rounded corners=6pt, draw=c4BordeLim, dashed, thick, inner sep=10pt},
+    c4flecha/.style={-{Stealth[length=2.5mm]}, semithick, draw=grisISO!90!black},
+    c4etiqueta/.style={font=\sffamily\scriptsize\itshape, text=grisISO!90!black, align=center,
+        fill=white, inner sep=1.5pt},
+    flujoInicio/.style={
+        rectangle, rounded corners=10pt, draw=flujoInicio!70!black, very thick,
+        fill=flujoInicio!85, text=white, align=center, font=\sffamily\scriptsize\bfseries,
+        minimum width=2.4cm, minimum height=0.8cm},
+    flujoProceso/.style={
+        rectangle, draw=c4Sistema!80!black, thick, fill=c4Componente!40,
+        align=center, font=\sffamily\scriptsize, minimum width=2.6cm, minimum height=0.9cm,
+        inner sep=3pt},
+    flujoDecision/.style={
+        diamond, aspect=2, draw=flujoDecision!70!black, thick, fill=flujoDecision!30,
+        align=center, font=\sffamily\scriptsize, inner sep=1pt, minimum width=2.6cm},
+    flujoFin/.style={
+        rectangle, rounded corners=10pt, draw=bgFail!70!black, very thick,
+        fill=bgFail!85, text=white, align=center, font=\sffamily\scriptsize\bfseries,
+        minimum width=2.4cm, minimum height=0.8cm},
+    flujoFlecha/.style={-{Stealth[length=2mm]}, semithick}
 }

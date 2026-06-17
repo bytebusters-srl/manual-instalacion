@@ -1,0 +1,265 @@
+% =============================================================================
+% CAPÍTULO 4 — CICLO DE CONSTRUCCIÓN Y COMPILACIÓN DEL ARTEFACTO MONOLÍTICO
+% =============================================================================
+\chapter[Construcción y Compilación del Artefacto]{Ciclo de Construcción y Compilación del Artefacto Monolítico}%
+\label{ch:construccion}
+\resumenCapitulo{Este capítulo describe el ensamblaje del artefacto desplegable. El
+proceso encadena tres fases —compilación del frontend, integración de los recursos
+estáticos y empaquetado del backend— orquestadas por el script \texttt{build.sh}. Se
+detalla cada fase, su automatización y los puntos de control que confirman un artefacto
+correctamente construido.}
+
+La construcción transforma el código fuente en un único JAR ejecutable. El orden de las
+fases es \textbf{estricto e inviolable}: el \textit{frontend} debe compilarse antes de que
+Maven empaquete el backend, porque sus archivos estáticos se incrustan dentro del JAR.
+La figura~\ref{fig:flujo-build} resume el flujo completo que automatiza
+\comando{build.sh}.\par
+
+\vspace{0.3cm}
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[node distance=0.7cm and 0.9cm]
+    \node[flujoInicio] (ini) {Inicio};
+    \node[flujoDecision, right=of ini] (chk) {¿JDK 17+?};
+    \node[flujoProceso, right=1.3cm of chk] (npm) {\texttt{npm ci}\\\scriptsize instala deps};
+    \node[flujoProceso, below=of npm] (build) {\texttt{npm run build}\\\scriptsize genera \texttt{dist/}};
+    \node[flujoProceso, left=of build] (copy) {Copia \texttt{dist/}\\$\rightarrow$ \texttt{static/}};
+    \node[flujoProceso, left=of copy] (mvn) {\texttt{mvn package}\\\scriptsize empaqueta JAR};
+    \node[flujoInicio, below=of mvn, fill=colorSecundario] (fin) {JAR listo};
+    \node[flujoFin, below=of chk] (err) {Aborta\\\scriptsize «JDK 17+»};
+
+    \draw[flujoFlecha] (ini) -- (chk);
+    \draw[flujoFlecha] (chk) -- node[c4etiqueta, above]{sí} (npm);
+    \draw[flujoFlecha] (chk) -- node[c4etiqueta, left]{no} (err);
+    \draw[flujoFlecha] (npm) -- (build);
+    \draw[flujoFlecha] (build) -- (copy);
+    \draw[flujoFlecha] (copy) -- (mvn);
+    \draw[flujoFlecha] (mvn) -- (fin);
+\end{tikzpicture}
+\caption{Flujo de construcción monolítica orquestado por \texttt{build.sh}: verificación, compilación del frontend, integración y empaquetado.}%
+\label{fig:flujo-build}
+\end{figure}
+
+% -----------------------------------------------------------------------------
+\section{Fase de Compilación del Frontend (\texttt{ethoshubF})}%
+\label{sec:build-frontend}
+
+La primera fase compila la SPA de React a archivos estáticos optimizados. Aunque
+\comando{build.sh} la automatiza, conviene comprender sus dos pasos para diagnosticar
+fallos.\par
+
+\subsection[Instalación de Dependencias del Cliente]{Descarga e Instalación de Dependencias del Lado del Cliente (Vite, React, Radix UI)}%
+\label{subsec:npm-ci}
+
+El \textit{frontend} declara sus dependencias en \comando{package.json} y las fija en
+\comando{package-lock.json}. La instalación reproducible se realiza con \comando{npm ci},
+que respeta el \textit{lockfile} al pie de la letra. Entre las dependencias principales
+figuran React 18.3, Vite 5.1, el componente accesible de Radix UI
+(\comando{@radix-ui/react-slot}), Zustand, Axios y \comando{@supabase/supabase-js}.\par
+
+\begin{lstlisting}[language=bash]
+$ cd ethoshubF
+$ npm ci --prefer-offline --no-fund --no-audit
+added 412 packages in 38s
+\end{lstlisting}
+
+\begin{NotaConfiguracion}
+\comando{build.sh} elimina deliberadamente \comando{NODE\_ENV=production} antes de instalar,
+para que las \textit{devDependencies} —incluidos \comando{typescript} y \comando{vite},
+necesarios para compilar— sí se instalen. Por eso el \textit{script} usa \comando{npm ci}
+«completo» y no una instalación de solo producción.
+\end{NotaConfiguracion}
+
+\subsection[Build del Frontend y Generación de /dist]{Ejecución del Proceso de Build (\texttt{npm run build}) y Generación del Directorio \texttt{/dist}}%
+\label{subsec:npm-build}
+
+El \textit{script} \comando{build} ejecuta \comando{tsc \&\& vite build}: primero el
+compilador de TypeScript valida los tipos (modo \comando{strict}) y luego Vite genera el
+\textit{bundle} optimizado en \comando{dist/}, separando el \textit{chunk} \comando{vendor}
+(React, React-DOM, React-Router) para mejorar el cacheo.\par
+
+\begin{lstlisting}[language=bash]
+$ npm run build
+> ethoshub@1.0.0 build
+> tsc && vite build
+vite v5.1.0 building for production...
+transforming...
+dist/index.html                   1.67 kB
+dist/assets/vendor-4f1c.js      142.10 kB
+dist/assets/index-9ab2.js       788.42 kB
+built in 22.41s
+\end{lstlisting}
+
+\begin{AvisoPrecaucion}
+La compilación de TypeScript (\comando{tsc}) es \textbf{estricta}: un error de tipos aborta
+el \textit{build} completo y, por tanto, el empaquetado del JAR. Si \comando{npm run build}
+falla, corrija los errores de tipos antes de continuar; no intente empaquetar con un
+\comando{dist/} incompleto.
+\end{AvisoPrecaucion}
+
+% -----------------------------------------------------------------------------
+\section{Fase de Integración y Acoplamiento de Componentes (\texttt{build.sh})}%
+\label{sec:buildsh}
+
+El \textit{script} \comando{build.sh} es el orquestador del proceso. Verifica las
+herramientas, compila el \textit{frontend}, transfiere los estáticos y empaqueta el
+backend. Admite tres modos de invocación:\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\ttfamily\bfseries\color{colorPrimario}}l|X|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Invocación} & \sffamily\textbf{Comportamiento} \\
+\hline
+./build.sh & Build completo: \texttt{npm ci} + \texttt{npm run build} + copia + \texttt{mvn package}. \\
+\hline
+\rowcolor{grisTecnico}
+./build.sh -{}-skip-fe & Omite el frontend; reutiliza el \texttt{dist/} existente (JAR solo backend). \\
+\hline
+./build.sh -{}-prod & Activa el perfil Spring \texttt{prod} (\texttt{-Pprod}) y omite los tests. \\
+\hline
+\end{tabularx}\normalfont\normalsize
+
+\par\vspace{0.3cm}
+\begin{lstlisting}[language=bash]
+$ cd ethoshubB
+$ ./build.sh --prod
+[INFO] Verificando dependencias del sistema...
+[EXITO] Java Version: JDK 17 detectado.
+[INFO] Fase 1: Preparando Frontend en ../ethoshubF
+[INFO] Fase 2: Limpiando directorio estatico de Spring Boot...
+[INFO] Fase 3: Ejecutando empaquetado de Spring Boot con Maven...
+[EXITO] BUILD COMPLETADO EXITOSAMENTE en 84 segundos.
+Artefacto generado: target/ethoshub-0.0.1-SNAPSHOT.jar
+\end{lstlisting}
+
+\subsection[Transferencia de Recursos Estáticos]{Automatización de la Transferencia de Recursos Estáticos (\texttt{/dist} a \texttt{/static} de Spring Boot)}%
+\label{subsec:transferencia}
+
+Tras compilar el \textit{frontend}, \comando{build.sh} \textbf{limpia} el directorio
+\ruta{ethoshubB/src/main/resources/static/} y copia en él todo el contenido de
+\comando{dist/}. La limpieza previa es esencial: evita que \textit{assets} huérfanos de
+\textit{builds} anteriores queden en el JAR y provoquen la caché obsoleta del
+apartado~\ref{sec:error-cache}.\par
+
+\begin{lstlisting}[language=bash]
+# Fase 2 de build.sh (extracto conceptual)
+rm -rf "$STATIC_DIR"          # limpia estaticos previos
+mkdir -p "$STATIC_DIR"
+cp -r "$DIST_DIR/." "$STATIC_DIR/"   # inyecta el nuevo dist/
+\end{lstlisting}
+
+\begin{NotaConfiguracion}
+Existe una redundancia deliberada: además de \comando{build.sh}, el \comando{pom.xml}
+declara el \textit{plugin} \comando{maven-resources-plugin} (fase \comando{process-resources})
+que vuelve a copiar \comando{\$\{frontend.dir\}/dist} a \comando{static/}. Así, aunque se
+invoque Maven directamente, los estáticos se incorporan. El \comando{SpaFallbackFilter}
+del backend sirve \comando{index.html} para las rutas de la SPA.
+\end{NotaConfiguracion}
+
+\subsection[Consistencia de Rutas e i18next]{Verificación de la Consistencia de Rutas e i18next (Multi-idioma)}%
+\label{subsec:i18next}
+
+El \textit{frontend} se internacionaliza con \comando{i18next} en tres idiomas: español
+(\comando{es}, fuente de verdad y \textit{fallback}), inglés (\comando{en}) y portugués
+(\comando{pt}). Las traducciones se empaquetan dentro del \textit{bundle}; no son archivos
+externos que deba copiar por separado. Tras la transferencia, verifique que el
+\comando{index.html} y los \textit{assets} llegaron a \comando{static/}:\par
+
+\begin{lstlisting}[language=bash]
+$ ls ethoshubB/src/main/resources/static/
+assets/  index.html  favicon.ico  ...
+\end{lstlisting}
+
+\begin{VerificacionOK}
+La presencia de \comando{index.html} y del directorio \comando{assets/} dentro de
+\comando{static/} confirma que la integración fue correcta. Si \comando{static/} está
+vacío, el JAR se servirá sin interfaz: revise que \comando{npm run build} generó
+\comando{dist/} antes de la copia.
+\end{VerificacionOK}
+
+% -----------------------------------------------------------------------------
+\section{Fase de Empaquetado del Backend (\texttt{ethoshubB})}%
+\label{sec:empaquetado}
+
+La fase final compila el backend Java y produce el JAR ejecutable que ya contiene la SPA.\par
+
+\subsection{Gestión de Dependencias mediante Maven (\texttt{pom.xml})}%
+\label{subsec:maven}
+
+El \comando{pom.xml} hereda de \comando{spring-boot-starter-parent} 4.0.6 y declara las
+dependencias del sistema. La tabla~\ref{tab:deps-backend} destaca las más relevantes para
+el operador.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.3}
+\fontsize{8.5}{10.2}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\ttfamily\bfseries\color{colorPrimario}\raggedright\arraybackslash}p{5.2cm}|X|}
+\hline
+\rowcolor{headerTabla}
+\sffamily\textbf{Dependencia} & \sffamily\textbf{Función} \\
+\hline
+spring-boot-starter-webmvc & Servidor web embebido (Tomcat) y controladores REST. \\
+\hline
+\rowcolor{grisTecnico}
+spring-boot-starter-jooq & Acceso a datos SQL tipado. \\
+\hline
+\seqsplit{...-security-oauth2-resource-server} & Validación de JWT de Supabase. \\
+\hline
+\rowcolor{grisTecnico}
+\seqsplit{springdoc-openapi-starter-webmvc-ui} & Swagger UI para la verificación (cap.~\ref{ch:verificacion}). \\
+\hline
+spring-boot-starter-actuator & \textit{Endpoints} de salud (\texttt{/actuator/health}). \\
+\hline
+\rowcolor{grisTecnico}
+testcontainers-postgresql & PostgreSQL efímero para tests de integración. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:deps-backend}
+
+\subsection[Generación del Código Tipado jOOQ]{Generación del Código Tipado de Acceso a Datos mediante el Generador de jOOQ}%
+\label{subsec:jooq}
+
+EthosHub accede a la base de datos con \textbf{jOOQ}, que opera sobre clases Java tipadas
+que reflejan el esquema \comando{core}. Estas clases deben mantenerse \textbf{alineadas}
+con el esquema real: si la base de datos cambia (una nueva migración) pero las clases no se
+regeneran, la compilación o la ejecución fallarán con la desalineación del
+apartado~\ref{sec:error-jooq}.\par
+
+\begin{NotaConfiguracion}
+La regeneración del código jOOQ se realiza contra el esquema actualizado de Supabase. Tras
+aplicar nuevas migraciones (apartado~\ref{subsec:migraciones}), regenere las clases antes
+de empaquetar para evitar inconsistencias entre el modelo Java y las tablas físicas.
+\end{NotaConfiguracion}
+
+\subsection[Empaquetado Final del JAR]{Ejecución del Empaquetado Final del Archivo Monolítico Compilado (\texttt{.jar})}%
+\label{subsec:jar}
+
+El empaquetado lo realiza el \comando{spring-boot-maven-plugin}. \comando{build.sh} invoca
+Maven en modo \textit{batch} y saltando los tests (\comando{-Dmaven.test.skip=true}) para
+acelerar el despliegue:\par
+
+\begin{lstlisting}[language=bash]
+# Empaquetado directo (equivalente a la Fase 3 de build.sh)
+$ mvn clean package -Dmaven.test.skip=true -Pprod --batch-mode
+...
+[INFO] BUILD SUCCESS
+$ ls -lh target/ethoshub-0.0.1-SNAPSHOT.jar
+-rw-rw-r-- 1 dpardo dpardo 78M target/ethoshub-0.0.1-SNAPSHOT.jar
+\end{lstlisting}
+
+\begin{VerificacionOK}
+Un empaquetado correcto deja en \comando{target/} el archivo
+\comando{ethoshub-0.0.1-SNAPSHOT.jar} (60--90~MB), además de un
+\comando{*-plain.jar} (sin dependencias, no ejecutable). El JAR de despliegue es el
+\textbf{primero}. \comando{build.sh} lo localiza automáticamente excluyendo el sufijo
+\comando{-plain.jar}.
+\end{VerificacionOK}
+
+\par\vspace{0.2cm}
+Con el artefacto generado, el capítulo~\ref{ch:despliegue} describe cómo ejecutarlo, tanto
+en modo de desarrollo como en producción con contenedores.\par

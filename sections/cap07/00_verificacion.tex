@@ -1,0 +1,291 @@
+% =============================================================================
+% CAPÍTULO 7 — PROTOCOLO DE VERIFICACIÓN E INSPECCIÓN DE LA INSTALACIÓN
+% =============================================================================
+\chapter[Verificación e Inspección]{Protocolo de Verificación e Inspección de la Instalación}%
+\label{ch:verificacion}
+\resumenCapitulo{Una instalación no se considera completa hasta que se verifica. Este
+capítulo define un protocolo de pruebas de humo (\textit{smoke tests}) que confirma, de lo
+más básico a lo más complejo, que el servicio responde: estado de salud, exposición de la
+API, flujo de autenticación con sus códigos de error y, finalmente, las integraciones de
+inteligencia artificial. Cierra con una lista de comprobación Go-Live.}
+
+La verificación sigue una escalera de complejidad creciente. Primero se confirma que el
+proceso \textbf{está vivo} (Actuator); luego, que la \textbf{API está expuesta} (Swagger);
+después, que el \textbf{flujo de seguridad} responde con los códigos correctos; y por
+último, que las \textbf{funciones de IA} operan. Ejecute las pruebas en este orden: un
+fallo temprano hace innecesarias las pruebas posteriores.\par
+
+% -----------------------------------------------------------------------------
+\section{Comprobación del Estado de Salud y Métricas Operacionales}%
+\label{sec:salud}
+
+\subsection[Estado con Spring Boot Actuator]{Consumo de Endpoints de Estado Mediante Spring Boot Actuator \\ (\texttt{/actuator/health})}%
+\label{subsec:actuator}
+
+Spring Boot Actuator expone el estado del servicio. La prueba más elemental consiste en
+consultar \comando{/actuator/health}, que debe responder \comando{200 OK} con un cuerpo
+\comando{\{"status":"UP"\}}.\par
+
+\begin{lstlisting}[language=bash]
+$ curl -s http://localhost:8080/actuator/health
+{"status":"UP"}
+
+# Con codigo HTTP explicito
+$ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/actuator/health
+200
+\end{lstlisting}
+
+\begin{VerificacionOK}
+\comando{\{"status":"UP"\}} con código \comando{200} confirma que el contexto de Spring
+arrancó, la conexión a la base de datos es viable y el servicio acepta peticiones. Un
+\comando{503} con \comando{"status":"DOWN"} indica un componente caído (típicamente la
+base de datos): revise las variables de Supabase y consulte el capítulo~\ref{ch:troubleshooting}.
+\end{VerificacionOK}
+
+\begin{NotaConfiguracion}
+Junto al \textit{endpoint} de Actuator, el backend declara un \comando{HealthController}
+propio. Ambos sirven como sonda de vida (\textit{liveness/readiness}) para orquestadores y
+balanceadores. En despliegues con Docker Compose puede asociarse a un \comando{healthcheck}
+que reinicie el contenedor si la sonda falla repetidamente.
+\end{NotaConfiguracion}
+
+% -----------------------------------------------------------------------------
+\section{Inspección y Validación de Interfaces de Programación (APIs)}%
+\label{sec:apis}
+
+\subsection[Inspección con Swagger UI]{Acceso y Pruebas Estructurales de Controladores REST mediante Swagger UI (\texttt{springdoc-openapi})}%
+\label{subsec:swagger}
+
+El backend integra \comando{springdoc-openapi}, que genera documentación interactiva de la
+API. Con el servicio en marcha, abra en el navegador:\par
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Swagger UI:} \ruta{http://localhost:8080/swagger-ui.html}
+    \item \textbf{OpenAPI JSON:} \ruta{http://localhost:8080/v3/api-docs}
+\end{itemize}
+
+Swagger UI lista todos los controladores REST agrupados por dominio. La
+tabla~\ref{tab:controllers} resume los principales grupos de \textit{endpoints} que el
+operador puede inspeccionar para confirmar que la API se expuso por completo.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.3}
+\fontsize{8.5}{10.2}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|>{\ttfamily\raggedright\arraybackslash}p{4.6cm}|X|}
+\hline
+\rowcolor{headerTabla}
+\sffamily\textbf{Dominio} & \sffamily\textbf{Controladores} & \sffamily\textbf{Función} \\
+\hline
+Autenticación & AuthController, ForgotPasswordController & Registro, login, recuperación. \\
+\hline
+\rowcolor{grisTecnico}
+Perfil y contenido & ProfileController, ProjectController, SkillController & CRUD del portafolio. \\
+\hline
+CV Studio & CvDocumentController, FileUploadController & Edición de CV, subida de archivos. \\
+\hline
+\rowcolor{grisTecnico}
+Reclutador & TalentController, RecruiterAiController & Descubrimiento e \textit{insights} de IA. \\
+\hline
+Infraestructura & HealthController & Sonda de salud. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:controllers}
+
+\begin{VerificacionOK}
+Si Swagger UI carga y muestra los grupos de \textit{endpoints} de la tabla~\ref{tab:controllers},
+la capa web del backend está plenamente operativa. Las respuestas siguen el envoltorio
+común \comando{ApiResponse}; un \textit{endpoint} público como el de salud puede probarse
+directamente desde el botón «Try it out».
+\end{VerificacionOK}
+
+% -----------------------------------------------------------------------------
+\section{Pruebas de Flujo Completo de Autenticación de Perfiles}%
+\label{sec:auth-flow}
+
+La autenticación es transversal: casi todos los \textit{endpoints} la exigen. Verificar su
+flujo completo, incluido el manejo de errores, es esencial. La figura~\ref{fig:seq-auth}
+muestra la secuencia de una petición protegida.\par
+
+\vspace{0.3cm}
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[font=\sffamily\scriptsize, node distance=2.9cm]
+    \node (c) {Cliente};
+    \node[right=of c] (ax) {Axios};
+    \node[right=of ax] (be) {Backend};
+    \node[right=2.4cm of be] (geh) {GlobalExc.Handler};
+    \foreach \n in {c,ax,be,geh} { \draw[grisISO!60] (\n.south) -- ++(0,-3.2); }
+    \draw[c4flecha] ([yshift=-0.4cm]c.south) -- node[above,font=\tiny]{acción} ([yshift=-0.4cm]ax.south);
+    \draw[c4flecha] ([yshift=-0.9cm]ax.south) -- node[above,font=\tiny]{+ Bearer JWT} ([yshift=-0.9cm]be.south);
+    \draw[c4flecha] ([yshift=-1.6cm]be.south) -- node[above,font=\tiny]{401/403} ([yshift=-1.6cm]geh.south);
+    \draw[c4flecha] ([yshift=-2.3cm]geh.south) -- node[above,font=\tiny]{ApiResponse error} ([yshift=-2.3cm]ax.south);
+    \draw[c4flecha] ([yshift=-2.8cm]ax.south) -- node[above,font=\tiny]{interceptor} ([yshift=-2.8cm]c.south);
+\end{tikzpicture}
+\caption{Secuencia de una petición autenticada: Axios añade el JWT, el backend valida y, ante un fallo, el \texttt{GlobalExceptionHandler} normaliza el error.}%
+\label{fig:seq-auth}
+\end{figure}
+
+\subsection[Manejo Global de Errores (401/403)]{Simulación de Respuestas de Control de Excepciones Global (\texttt{Global\-Exception\-Handler}) ante Códigos 401 y 403}%
+\label{subsec:401-403}
+
+El \comando{GlobalExceptionHandler} centraliza el manejo de errores y garantiza respuestas
+consistentes. Pruebe los dos escenarios de seguridad:\par
+
+\begin{lstlisting}[language=bash]
+# 1. Sin token -> 401 Unauthorized
+$ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/v1/profile
+401
+
+# 2. Con token valido pero sin permisos -> 403 Forbidden
+$ curl -s -o /dev/null -w "%{http_code}\n" \
+    -H "Authorization: Bearer <token-de-rol-insuficiente>" \
+    http://localhost:8080/v1/admin/metrics
+403
+\end{lstlisting}
+
+\begin{VerificacionOK}
+Obtener \comando{401} sin credencial y \comando{403} con credencial de rol insuficiente
+confirma que la cadena de seguridad y el \comando{GlobalExceptionHandler} operan
+correctamente. Un \comando{200} en el primer caso indicaría que un \textit{endpoint}
+protegido quedó abierto: revísese de inmediato la configuración del Resource Server
+(apartado~\ref{subsec:jwt}).
+\end{VerificacionOK}
+
+\subsection[Verificación del Interceptor Axios]{Verificación del Interceptor Axios en la Cadena de Peticiones del Perfil}%
+\label{subsec:axios}
+
+En el cliente, el servicio \comando{apiClient} (Axios) registra interceptores que adjuntan
+el JWT a cada petición saliente y gestionan las respuestas de error: ante un \comando{401},
+el interceptor puede limpiar la sesión y redirigir al \textit{login}. Para verificarlo,
+abra las herramientas de desarrollo del navegador (pestaña \textit{Network}), inicie sesión
+y observe que las peticiones a \comando{/v1/*} incluyen la cabecera \comando{Authorization:
+Bearer}.\par
+
+\begin{NotaConfiguracion}
+La sesión vive en \comando{sessionStorage} (sesiones múltiples aisladas por pestaña), y el
+cierre de sesión global se propaga vía \comando{BroadcastChannel}. Si tras autenticarse las
+peticiones no llevan el \textit{token}, revise que la variable \comando{VITE\_SUPABASE\_URL}
+y la \comando{ANON\_KEY} del \textit{frontend} apuntan al mismo proyecto Supabase que el
+backend.
+\end{NotaConfiguracion}
+
+% -----------------------------------------------------------------------------
+\section{Pruebas de Integración de los Servicios de Inteligencia Artificial}%
+\label{sec:ia}
+
+La última verificación cubre las funciones de IA, que dependen de \comando{GEMINI\_API\_KEY}.
+Estas pruebas confirman tanto la conectividad con Gemini como el manejo de su degradación.\par
+
+\subsection[Asistente de CV (ai-assist)]{Validación de Consumo en \texttt{/v1/cv-documents/ai-assist} (Asistente de CV)}%
+\label{subsec:ai-cv}
+
+El asistente del CV Studio se consume en \ruta{/v1/cv-documents/ai-assist}. Una petición
+autenticada con un \textit{prompt} válido debe devolver \comando{200} con la sugerencia
+generada.\par
+
+\begin{lstlisting}[language=bash]
+$ curl -s -o /dev/null -w "%{http_code}\n" -X POST \
+    -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+    -d '{"prompt":"Mejora este resumen profesional"}' \
+    http://localhost:8080/v1/cv-documents/ai-assist
+200
+\end{lstlisting}
+
+\subsection[Insights de Reclutamiento (ai-insights)]{Validación de Consumo en \texttt{/v1/recruiter/ai-insights} (Insights de Reclutamiento)}%
+\label{subsec:ai-recruiter}
+
+Los \textit{insights} de reclutamiento se consumen en \ruta{/v1/recruiter/ai-insights}. La
+tabla~\ref{tab:ia-endpoints} resume ambos \textit{endpoints} y su comportamiento ante la
+ausencia de clave.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.3}
+\fontsize{8.5}{10.2}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\ttfamily\color{colorPrimario}\raggedright\arraybackslash}p{4.4cm}|c|X|}
+\hline
+\rowcolor{headerTabla}
+\sffamily\textbf{Endpoint} & \sffamily\textbf{Método} & \sffamily\textbf{Comportamiento sin \texttt{GEMINI\_API\_KEY}} \\
+\hline
+/v1/cv-documents/ai-assist & POST & Devuelve error (mapeado por \texttt{AiServiceException}). \\
+\hline
+\rowcolor{grisTecnico}
+\seqsplit{/v1/recruiter/ai-insights} & POST & Devuelve error; el resto del sistema sigue operativo. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:ia-endpoints}
+
+\begin{NotaConfiguracion}
+El backend mapea los fallos \textit{upstream} de Gemini mediante \comando{AiServiceException}:
+un \comando{429} de Gemini se propaga como \comando{429}, un \comando{5xx} como
+\comando{503} y otros como \comando{502}, evitando \comando{500} genéricos. Así, un fallo de
+IA es diagnosticable por su código HTTP, según se amplía en el apartado~\ref{sec:degradacion-ia}.
+\end{NotaConfiguracion}
+
+% -----------------------------------------------------------------------------
+\section{Pruebas de Humo Adicionales por Módulo}%
+\label{sec:smoke-modulos}
+
+Más allá del núcleo de autenticación e IA, conviene confirmar que los módulos transversales
+responden. La tabla~\ref{tab:smoke} propone una prueba mínima por módulo y su resultado
+esperado; ejecútelas autenticado, desde la interfaz o con \comando{curl}.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.3}
+\fontsize{8.5}{10.2}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|X|>{\raggedright\arraybackslash}p{3.2cm}|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Módulo} & \textbf{Prueba} & \textbf{Resultado esperado} \\
+\hline
+Portafolio público & Abrir la URL pública de un perfil sin sesión. & Carga sin pedir \textit{login}. \\
+\hline
+\rowcolor{grisTecnico}
+Subida de archivos & Subir un PDF en un proyecto. & 200 y archivo listado. \\
+\hline
+Chat (Realtime) & Enviar un mensaje entre dos sesiones. & Entrega en tiempo real. \\
+\hline
+\rowcolor{grisTecnico}
+i18n & Cambiar idioma a \texttt{en} y \texttt{pt}. & Interfaz traducida; \textit{fallback} a \texttt{es}. \\
+\hline
+Conexiones & Añadir una conexión URL-first. & Persistida y visible en el perfil. \\
+\hline
+\rowcolor{grisTecnico}
+Notificaciones & Generar una acción que notifique. & Aparece en el centro de notificaciones. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:smoke}
+
+\begin{NotaConfiguracion}
+El chat usa \textbf{Supabase Realtime} directamente desde el navegador (no a través del
+backend). Si los mensajes no llegan en tiempo real pero el resto funciona, revise que la
+\comando{VITE\_SUPABASE\_URL} y la \comando{ANON\_KEY} del \textit{frontend} permiten la
+conexión \textit{WebSocket} a Realtime y que el cortafuegos no bloquea dicho canal.
+\end{NotaConfiguracion}
+
+% -----------------------------------------------------------------------------
+\section{Lista de Comprobación Go-Live}%
+\label{sec:golive}
+
+Antes de declarar la instalación apta para evaluación, complete la siguiente lista. Cada
+ítem corresponde a una verificación de este capítulo o de los anteriores.\par
+
+\begin{ChecklistGoLive}
+    \item El comando \comando{java -version} reporta JDK 17 o superior.
+    \item \comando{build.sh} finalizó con \comando{BUILD COMPLETADO EXITOSAMENTE} y generó el JAR.
+    \item El directorio \comando{static/} contiene \comando{index.html} y \comando{assets/}.
+    \item Las variables obligatorias de la tabla~\ref{tab:matriz-vars} están definidas.
+    \item \comando{/actuator/health} responde \comando{\{"status":"UP"\}} con código 200.
+    \item Swagger UI carga y lista los controladores REST.
+    \item Una petición sin \textit{token} devuelve 401 y una sin permisos, 403.
+    \item Los \textit{endpoints} de IA responden (o degradan de forma controlada).
+    \item En despliegue HTTP, las excepciones de navegador del apartado~\ref{sec:pwa-http} están aplicadas.
+    \item La \comando{SERVICE\_ROLE\_KEY} no aparece en ninguna variable \comando{VITE\_*}.
+\end{ChecklistGoLive}
+
+\par\vspace{0.2cm}
+Superada esta lista, la instalación está verificada. Si alguna comprobación falló, el
+capítulo~\ref{ch:troubleshooting} cataloga los incidentes más frecuentes y sus
+soluciones.\par

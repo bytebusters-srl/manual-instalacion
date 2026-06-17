@@ -1,0 +1,366 @@
+% =============================================================================
+% CAPÍTULO 5 — PROCEDIMIENTOS DE DESPLIEGUE Y EJECUCIÓN
+% =============================================================================
+\chapter[Despliegue y Ejecución]{Procedimientos de Despliegue y Ejecución}%
+\label{ch:despliegue}
+\resumenCapitulo{Con el artefacto construido, este capítulo detalla cómo ponerlo en
+funcionamiento. Cubre dos escenarios: el modo de desarrollo —con frontend y backend como
+procesos separados unidos por un proxy— y el modo de producción con contenedores Docker,
+incluyendo la construcción de la imagen, la orquestación con Docker Compose y la gestión
+de volúmenes y redes.}
+
+El despliegue admite dos modalidades según el objetivo. Para \textbf{ingeniería y
+evaluación local} se usa el modo de desarrollo, que ofrece recarga en caliente. Para un
+\textbf{servicio estable} se usa el modo de producción, que ejecuta el JAR monolítico,
+preferiblemente dentro de un contenedor. La tabla~\ref{tab:modos} contrasta ambos.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|X|X|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Aspecto} & \textbf{Desarrollo} & \textbf{Producción} \\
+\hline
+Procesos & Dos (Vite + backend) & Uno (JAR / contenedor) \\
+\hline
+\rowcolor{grisTecnico}
+Puertos & 3000 (UI) + 8080 (API) & 8080 (todo) \\
+\hline
+Frontend & Servido por Vite con HMR & Estático dentro del JAR \\
+\hline
+\rowcolor{grisTecnico}
+Recarga en caliente & Sí & No \\
+\hline
+Perfil Spring & \texttt{local} & \texttt{prod} \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:modos}
+
+% -----------------------------------------------------------------------------
+\section{Despliegue en Modo de Desarrollo e Ingeniería (Local/Sandbox)}%
+\label{sec:dev}
+
+El modo de desarrollo está pensado para iterar sobre el código. No se empaqueta el JAR:
+se arrancan los dos servidores por separado.\par
+
+\subsection[Ejecución Simultánea (Servidores y Proxy)]{Ejecución Simultánea de Servidores Remotos y Proxies locales}%
+\label{sec:dev-mode}
+
+Se requieren \textbf{dos terminales}. En la primera se arranca el backend con Maven (perfil
+\comando{local} por defecto); en la segunda, el servidor de desarrollo de Vite.\par
+
+\begin{lstlisting}[language=bash]
+# --- Terminal 1: backend (puerto 8080) ---
+$ cd ethoshubB
+$ export SUPABASE_URL=... SUPABASE_ANON_KEY=... GEMINI_API_KEY=...
+$ mvn spring-boot:run
+... Tomcat started on port 8080 (http)
+... Started EthosHubApplication in 6.4 seconds
+
+# --- Terminal 2: frontend (puerto 3000) ---
+$ cd ethoshubF
+$ cp .env.example .env     # rellene VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+$ npm run dev
+  VITE v5.1.0  ready in 612 ms
+  Local:   http://localhost:3000/
+\end{lstlisting}
+
+\begin{VerificacionOK}
+Abra \comando{http://localhost:3000} en el navegador. La SPA carga desde Vite y sus
+peticiones a \comando{/api}, \comando{/auth} y \comando{/v1} se reenvían de forma
+transparente al backend en \comando{:8080} gracias al proxy (apartado~\ref{subsec:viteproxy}).
+No necesita definir \comando{VITE\_API\_URL} en este modo.
+\end{VerificacionOK}
+
+\begin{NotaConfiguracion}
+El nombre «servidores remotos y proxies locales» alude a que la SPA, aunque se sirve
+localmente desde Vite, consume datos de servicios \textbf{remotos} (Supabase, Gemini)
+mientras el proxy local resuelve las llamadas a la API del backend. Esta separación
+desaparece en producción, donde todo converge en el monolito.
+\end{NotaConfiguracion}
+
+% -----------------------------------------------------------------------------
+\section{Despliegue en Modo de Producción y Contenedores}%
+\label{sec:prod}
+
+En producción se ejecuta el artefacto monolítico. La vía más simple es ejecutar el JAR
+directamente; la recomendada para entornos reproducibles es el contenedor Docker.\par
+
+\begin{lstlisting}[language=bash]
+# Ejecucion directa del JAR (sin Docker)
+$ java -jar target/ethoshub-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
+\end{lstlisting}
+
+\subsection{Construcción de la Imagen Docker del Monolito}%
+\label{subsec:docker-build}
+
+El \comando{Dockerfile} usa una construcción \textbf{multi-etapa}: la primera compila el
+backend con \comando{eclipse-temurin:17-jdk}; la segunda parte de
+\comando{eclipse-temurin:17-jre}, instala \textbf{Tectonic} (motor LaTeX para el CV Studio)
+y \textbf{precalienta} su caché de paquetes para que la compilación de currículums en
+producción tarde 1--2~segundos. La figura~\ref{fig:docker-stages} ilustra las etapas.\par
+
+\vspace{0.3cm}
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[node distance=1.0cm]
+    \node[c4contenedor, fill=c4Contenedor!80, minimum width=4.2cm] (s1) {Stage 1: build\\\scriptsize \texttt{temurin:17-jdk}\\\scriptsize \texttt{mvnw package}};
+    \node[c4contenedor, right=2.2cm of s1, minimum width=4.6cm] (s2) {Stage 2: runtime\\\scriptsize \texttt{temurin:17-jre} + Tectonic\\\scriptsize precalienta cache LaTeX};
+    \draw[c4flecha] (s1) -- node[c4etiqueta, above]{copia \texttt{app.jar}} (s2);
+    \node[c4externo, below=0.9cm of s2, fill=colorSecundario, text=white] (img) {Imagen final\\\scriptsize \texttt{EXPOSE 8080}};
+    \draw[c4flecha] (s2) -- (img);
+\end{tikzpicture}
+\caption{Construcción multi-etapa del \texttt{Dockerfile}: compilación en JDK y ejecución en JRE con Tectonic precalentado.}%
+\label{fig:docker-stages}
+\end{figure}
+
+\begin{lstlisting}[language=bash]
+$ cd ethoshubB
+$ docker build -t ethoshub:2.0.0 .
+...
+ => exporting to image
+ => => naming to docker.io/library/ethoshub:2.0.0
+$ docker images | grep ethoshub
+ethoshub   2.0.0   a1b2c3d4   2 minutes ago   612MB
+\end{lstlisting}
+
+\begin{AvisoPrecaucion}
+La imagen instala Tectonic desde un binario \texttt{x86\_64-unknown-linux-musl}: la
+construcción asume arquitectura \textbf{amd64}. En máquinas ARM (por ejemplo, Apple
+Silicon) deberá usar emulación (\comando{-{}-platform linux/amd64}) o sustituir el binario
+de Tectonic por su variante ARM.
+\end{AvisoPrecaucion}
+
+\subsection[Orquestación con Docker Compose]{Levantamiento del Entorno Orquestado mediante Docker Compose}%
+\label{subsec:compose}
+
+\comando{docker-compose.yml} define el servicio \comando{ethoshub-backend}, mapea el puerto
+8080, inyecta las variables de entorno y declara el volumen de caché y la red aislada.
+Levante el entorno con:\par
+
+\begin{lstlisting}[language=bash]
+$ cd ethoshubB
+$ docker compose up -d --build
+[+] Running 2/2
+ - Network ethoshub-net          Created
+ - Container ethoshub-backend-1  Started
+$ docker compose ps
+NAME                   STATUS         PORTS
+ethoshub-backend-1     Up 12 seconds  0.0.0.0:8080->8080/tcp
+\end{lstlisting}
+
+\begin{NotaConfiguracion}
+Antes de levantar el servicio, edite el bloque \comando{environment} de
+\comando{docker-compose.yml} con las credenciales reales de Supabase
+(\comando{SUPABASE\_DB\_URL}, \comando{SUPABASE\_DB\_USER}, \comando{SUPABASE\_DB\_PASSWORD},
+\comando{SUPABASE\_JWKS\_URI}). Para no exponer secretos en el archivo, puede sustituir los
+valores por referencias a un archivo \comando{.env} mediante la directiva
+\comando{env\_file}.
+\end{NotaConfiguracion}
+
+\subsection[Volúmenes y Aislamiento de Redes]{Persistencia de Volúmenes y Aislamiento de Redes del Contenedor}%
+\label{subsec:volumenes}
+
+El \comando{docker-compose.yml} declara un volumen nombrado y una red dedicada, cuyos
+propósitos se resumen en la tabla~\ref{tab:compose-infra}.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\ttfamily\bfseries\color{colorPrimario}}l|l|X|}
+\hline
+\rowcolor{headerTabla}
+\sffamily\textbf{Recurso} & \sffamily\textbf{Tipo} & \sffamily\textbf{Propósito} \\
+\hline
+spring-cache & Volumen & Cachea \texttt{\textasciitilde/.m2} (dependencias Maven) entre ejecuciones. \\
+\hline
+\rowcolor{grisTecnico}
+ethoshub-net & Red \textit{bridge} & Aísla el contenedor en una red propia. \\
+\hline
+. : /app & \textit{Bind mount} & Mapea el código al contenedor (útil en desarrollo). \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:compose-infra}
+
+\par\vspace{0.2cm}
+\begin{lstlisting}[language=bash]
+# docker-compose.yml (extracto)
+volumes:
+  - .:/app                 # bind mount del codigo
+  - spring-cache:/root/.m2  # cache persistente de Maven
+networks:
+  - ethoshub-net           # red bridge aislada
+\end{lstlisting}
+
+\begin{AvisoAdvertencia}
+El volumen \comando{spring-cache} \textbf{persiste} entre reinicios y reconstrucciones. Es
+deseable para acelerar \textit{builds}, pero recuerde que su purga forma parte de la
+desinstalación completa (capítulo~\ref{ch:desinstalacion}). No elimine este volumen en
+caliente si una construcción está en curso.
+\end{AvisoAdvertencia}
+
+\par\vspace{0.3cm}
+Conviene asociar al servicio una sonda de salud (\textit{healthcheck}) para que el
+orquestador detecte y reinicie un contenedor no saludable. Añada al servicio de
+\comando{docker-compose.yml}:\par
+
+\begin{lstlisting}[language=bash]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+\end{lstlisting}
+
+\par\vspace{0.2cm}
+La tabla~\ref{tab:escenarios} resume los escenarios de despliegue habituales y su
+idoneidad, para ayudar a elegir la modalidad acorde al entorno de destino.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.5}{10.2}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|X|c|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Escenario} & \textbf{Descripción} & \textbf{Recomendado} \\
+\hline
+JAR directo & \texttt{java -jar} en una VM con systemd. & Evaluación / VM simple \\
+\hline
+\rowcolor{grisTecnico}
+Docker Compose & Contenedor orquestado en un único host. & Producción estándar \\
+\hline
+PaaS (contenedor) & Imagen publicada en un registro y desplegada en la nube. & Producción gestionada \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:escenarios}
+
+\begin{NotaConfiguracion}
+EthosHub es \textbf{\textit{stateless}} respecto a la persistencia (toda en Supabase), salvo
+los archivos temporales de \comando{uploads/}. Esto facilita el escalado horizontal: pueden
+ejecutarse varias instancias del JAR tras un balanceador. Si escala horizontalmente, asegure
+que \comando{uploads/} use almacenamiento compartido o que los archivos se promuevan a
+Supabase Storage, para no perder subidas servidas por otra instancia.
+\end{NotaConfiguracion}
+
+\par\vspace{0.2cm}
+Verifique los registros del contenedor para confirmar el arranque correcto antes de pasar
+a las pruebas de verificación del capítulo~\ref{ch:verificacion}:\par
+
+\begin{lstlisting}[language=bash]
+$ docker compose logs -f ethoshub-backend
+... Started EthosHubApplication in 7.8 seconds (process running for 8.5)
+\end{lstlisting}
+
+\begin{VerificacionOK}
+El mensaje \comando{Started EthosHubApplication} en los \textit{logs}, junto con el estado
+\comando{Up} en \comando{docker compose ps}, confirma que el monolito está operativo y
+escuchando en el puerto 8080. Proceda entonces a la configuración de seguridad
+(capítulo~\ref{ch:seguridad}) y a la verificación (capítulo~\ref{ch:verificacion}).
+\end{VerificacionOK}
+
+% -----------------------------------------------------------------------------
+\section[Instalación de la PWA (Escritorio y Móvil)]{Instalación de la Aplicación Web Progresiva en Escritorio y Dispositivos Móviles}%
+\label{sec:pwa}
+
+EthosHub se distribuye como \textbf{Aplicación Web Progresiva (PWA)}: una vez desplegada y
+servida sobre HTTPS, el navegador permite \textbf{instalarla} en el sistema operativo del
+usuario final, de modo que se ejecute en su propia ventana —sin barra de direcciones—,
+disponga de icono propio y ofrezca arranque rápido y soporte parcial sin conexión. Esta
+sección documenta el procedimiento de instalación para los usuarios, complementando el
+despliegue del servidor descrito en los apartados anteriores.\par
+
+\begin{NotaConfiguracion}
+La instalación de una PWA \textbf{exige un origen seguro}: la aplicación debe servirse bajo
+\comando{https://} (o \comando{http://localhost} en pruebas locales) y exponer un
+\textit{Web App Manifest} (\comando{manifest.webmanifest}) y un \textit{Service Worker}
+registrado. Si el navegador no ofrece la opción de instalar, verifique primero que el
+certificado TLS es válido (apartado~\ref{ch:seguridad}) y que el manifiesto se carga sin
+errores desde las herramientas de desarrollo (pestaña \comando{Application > Manifest}).
+\end{NotaConfiguracion}
+
+\subsection[Instalación en Escritorio (Chrome, Edge)]{Instalación en Equipos de Escritorio (Navegadores Basados en Chromium)}%
+\label{subsec:pwa-pc}
+
+En navegadores de escritorio basados en Chromium (Google Chrome, Microsoft Edge, Brave,
+Opera) la instalación se ofrece mediante un \textbf{icono de instalación} situado al extremo
+derecho de la barra de direcciones (un monitor con una flecha de descarga). El procedimiento
+es el siguiente:\par
+
+\begin{enumerate}\setlength{\itemsep}{2pt}
+  \item Acceda a la URL de producción de EthosHub (p.~ej. \comando{https://ethoshub.example.com}).
+  \item Pulse el icono \textbf{Instalar} de la barra de direcciones, o bien abra el menú
+        \comando{\faEllipsisV} $>$ \comando{Guardar y compartir} $>$ \comando{Instalar EthosHub...} (en Edge,
+        \comando{\faEllipsisV} $>$ \comando{Aplicaciones} $>$ \comando{Instalar este sitio como aplicación}).
+  \item Confirme en el diálogo emergente pulsando \textbf{Instalar}.
+\end{enumerate}
+
+\begin{VerificacionOK}
+Tras confirmar, EthosHub se abre en una \textbf{ventana independiente} sin barra de
+direcciones y se crea un acceso directo en el menú de inicio (Windows), el \textit{Launchpad}
+o Aplicaciones (macOS) o el menú de aplicaciones (Linux). En Chrome, la aplicación instalada
+queda listada en \comando{chrome://apps}.
+\end{VerificacionOK}
+
+\begin{AvisoNota}
+Firefox de escritorio \textbf{no} admite la instalación de PWA de forma nativa. Para una
+experiencia instalada recomiende a los usuarios un navegador basado en Chromium; en Firefox
+la aplicación seguirá funcionando con normalidad dentro de una pestaña.
+\end{AvisoNota}
+
+\subsection[Instalación en Móvil (Android e iOS)]{Instalación en Dispositivos Móviles (Android e iOS/iPadOS)}%
+\label{subsec:pwa-movil}
+
+El procedimiento difiere según el sistema operativo móvil. La tabla~\ref{tab:pwa-movil}
+resume ambos flujos.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|X|X|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Aspecto} & \textbf{Android (Chrome)} & \textbf{iOS / iPadOS (Safari)} \\
+\hline
+Navegador requerido & Google Chrome & Safari (obligatorio) \\
+\hline
+\rowcolor{grisTecnico}
+Punto de entrada & Menú \texttt{\faEllipsisV} o aviso «Añadir a pantalla» & Botón \textit{Compartir} \\
+\hline
+Acción & «Instalar aplicación» / «Añadir a pantalla de inicio» & «Añadir a pantalla de inicio» \\
+\hline
+\rowcolor{grisTecnico}
+Resultado & Icono + ventana sin barra (WebAPK) & Icono en pantalla de inicio \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:pwa-movil}
+
+\par\vspace{0.3cm}
+\textbf{Android (Google Chrome).} Abra la URL de EthosHub y, cuando aparezca el aviso
+inferior «Añadir EthosHub a la pantalla de inicio», acéptelo. Si no aparece, abra el menú
+\comando{\faEllipsisV} y seleccione \comando{Instalar aplicación} (o \comando{Añadir a pantalla
+de inicio}). Chrome generará un \textit{WebAPK} que integra la aplicación con el sistema
+como si fuera una app nativa.\par
+
+\textbf{iOS / iPadOS (Safari).} La instalación solo es posible desde \textbf{Safari}: pulse
+el botón \textbf{Compartir} (el cuadrado con la flecha hacia arriba), desplácese y elija
+\comando{Añadir a pantalla de inicio}, ajuste el nombre si lo desea y confirme con
+\textbf{Añadir}.\par
+
+\begin{AvisoPrecaucion}
+En iOS, los navegadores de terceros (Chrome, Edge, Firefox) usan el motor WebKit pero
+\textbf{no} ofrecen la opción «Añadir a pantalla de inicio» con experiencia de PWA: dirija
+siempre a los usuarios de iPhone y iPad a \textbf{Safari} para instalar EthosHub.
+\end{AvisoPrecaucion}
+
+\begin{VerificacionOK}
+La PWA está correctamente instalada cuando, al abrirla desde el icono del dispositivo,
+arranca en \textbf{pantalla completa sin la interfaz del navegador} (barra de direcciones ni
+pestañas). Esto confirma que el manifiesto declara \comando{"display": "standalone"} y que el
+\textit{Service Worker} sirve el \textit{shell} de la aplicación.
+\end{VerificacionOK}

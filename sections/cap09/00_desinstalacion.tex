@@ -1,0 +1,202 @@
+% =============================================================================
+% CAPÍTULO 9 — PROTOCOLOS DE DESINSTALACIÓN, LIMPIEZA Y REVERSIÓN (ROLLBACK)
+% =============================================================================
+\chapter[Desinstalación y Reversión]{Protocolos de Desinstalación, Limpieza y Reversión}%
+\label{ch:desinstalacion}
+\resumenCapitulo{Toda instalación debe poder revertirse de forma limpia y segura. Este
+capítulo describe el desmantelamiento ordenado del entorno —contenedores, redes y
+volúmenes de Docker— y la limpieza del estado local del cliente almacenado en el navegador.
+Cierra el ciclo de vida del despliegue documentado en este manual.}
+
+La reversión persigue dos objetivos: liberar los recursos del servidor y eliminar todo
+rastro de sesión en los equipos de evaluación. El orden recomendado es: primero detener y
+purgar la infraestructura de contenedores; después, limpiar el almacenamiento del cliente.
+La tabla~\ref{tab:reversion} resume el alcance de cada nivel de limpieza.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|X|c|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Nivel} & \textbf{Acción} & \textbf{Reversible} \\
+\hline
+Detención & Para los contenedores sin borrar nada. & Sí \\
+\hline
+\rowcolor{grisTecnico}
+Purga & Elimina contenedores, redes y volúmenes. & No \\
+\hline
+Limpieza cliente & Borra tokens y datos del navegador. & No \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:reversion}
+
+% -----------------------------------------------------------------------------
+\section{Desmantelamiento Seguro del Entorno}%
+\label{sec:desmantelamiento}
+
+El desmantelamiento del lado del servidor se realiza con los subcomandos de Docker Compose.
+Distinga entre una \textbf{detención reversible} y una \textbf{purga definitiva}.\par
+
+\subsection[Purga de Contenedores, Redes y Volúmenes]{Detención y Purga de Contenedores, Redes Aisladas y Volúmenes de Docker}%
+\label{subsec:purga-docker}
+
+Para detener el servicio sin destruir datos —por ejemplo, durante un mantenimiento— basta
+con \comando{stop}. Para una reversión completa, use \comando{down} con la opción de
+volúmenes.\par
+
+\begin{lstlisting}[language=bash]
+# 1. Detencion reversible (conserva contenedores y volumenes)
+$ docker compose stop
+
+# 2. Purga: elimina contenedores y la red aislada (conserva volumenes)
+$ docker compose down
+
+# 3. Purga TOTAL: ademas elimina los volumenes nombrados (spring-cache)
+$ docker compose down -v
+
+# 4. Elimina la imagen del monolito
+$ docker rmi ethoshub:2.0.0
+\end{lstlisting}
+
+\begin{PuntoNoRetorno}
+El comando \comando{docker compose down -v} \textbf{elimina los volúmenes nombrados},
+incluida la caché \comando{spring-cache}. Es una operación \textbf{irreversible}: la caché
+de dependencias Maven se reconstruirá desde cero en el siguiente despliegue. Ejecútelo solo
+si pretende una limpieza total del entorno.
+\end{PuntoNoRetorno}
+
+\par\vspace{0.2cm}
+Verifique que no queden recursos residuales tras la purga:\par
+
+\begin{lstlisting}[language=bash]
+$ docker compose ps          # no debe listar contenedores
+$ docker volume ls | grep ethoshub   # vacio tras 'down -v'
+$ docker network ls | grep ethoshub-net  # vacio tras 'down'
+\end{lstlisting}
+
+\begin{VerificacionOK}
+Si \comando{docker compose ps} no muestra contenedores y los listados de volúmenes y redes
+no contienen recursos \comando{ethoshub}, el desmantelamiento del servidor fue completo. El
+puerto 8080 queda libre, lo que puede confirmarse con \comando{ss -ltnp | grep 8080}.
+\end{VerificacionOK}
+
+\begin{NotaConfiguracion}
+Si desplegó sin Docker (ejecución directa del JAR), la «desinstalación» consiste
+simplemente en detener el proceso Java (\comando{Ctrl+C} o \comando{kill <pid>}) y, si lo
+desea, borrar el directorio \comando{target/} y los archivos de log. No quedan servicios de
+sistema instalados, pues el JAR es autocontenido.
+\end{NotaConfiguracion}
+
+% -----------------------------------------------------------------------------
+\section{Limpieza del Almacenamiento Local de Datos del Perfil}%
+\label{sec:limpieza-cliente}
+
+EthosHub mantiene estado en el navegador del usuario: la sesión vive en
+\comando{sessionStorage} y ciertas preferencias en \comando{localStorage}. Tras una
+evaluación, conviene purgar este estado en los equipos compartidos.\par
+
+\subsection[Limpieza de localStorage y sessionStorage]{Depuración de Tokens de Sesión e Historiales en \\ \texttt{localStorage} y \texttt{sessionStorage}}%
+\label{subsec:limpieza-storage}
+
+La limpieza puede hacerse desde la interfaz del navegador (ajustes de privacidad $\to$
+borrar datos del sitio) o mediante la consola de desarrollo. Esta última es la más directa
+y específica del dominio:\par
+
+\begin{lstlisting}[language=bash]
+// Consola de desarrollo del navegador (F12), en el dominio de EthosHub:
+localStorage.clear();      // borra preferencias persistentes
+sessionStorage.clear();    // borra la sesion (token JWT, estado por pestana)
+// Recargue la pagina para aplicar:
+location.reload();
+\end{lstlisting}
+
+\par\vspace{0.2cm}
+La tabla~\ref{tab:storage} indica qué se elimina con cada almacén.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\ttfamily\bfseries\color{colorPrimario}}l|X|}
+\hline
+\rowcolor{headerTabla}
+\sffamily\textbf{Almacén} & \sffamily\textbf{Contenido eliminado} \\
+\hline
+sessionStorage & Token de sesión (JWT) y estado de la pestaña; el cierre de sesión se propaga vía \texttt{BroadcastChannel}. \\
+\hline
+\rowcolor{grisTecnico}
+localStorage & Preferencias persistentes (idioma, ajustes de interfaz). \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:storage}
+
+\begin{AlertaSeguridad}
+En equipos \textbf{compartidos} de evaluación, la limpieza del almacenamiento es
+\textbf{obligatoria} al finalizar: un \textit{token} de sesión olvidado en
+\comando{sessionStorage} podría permitir a otro usuario continuar la sesión. Cierre sesión
+explícitamente y, a continuación, purgue el almacenamiento del navegador.
+\end{AlertaSeguridad}
+
+\begin{AvisoNota}
+Si durante la evaluación aplicó las excepciones de origen inseguro del
+apartado~\ref{sec:pwa-http}, recuerde \textbf{revertir también esas banderas} del
+navegador: vuelva a poner en \textit{Disabled} la opción «Insecure origins treated as
+secure» (Chromium) o en \comando{false} las claves \comando{media.*.insecure.enabled}
+(Firefox). Así restaura la postura de seguridad original del equipo.
+\end{AvisoNota}
+
+% -----------------------------------------------------------------------------
+\section{Respaldo Previo y Reversión de Versión}%
+\label{sec:rollback-version}
+
+Antes de una purga total o de actualizar a una nueva versión, conserve los elementos cuya
+pérdida no es trivial. La tabla~\ref{tab:backup} indica qué respaldar y cómo.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|X|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Elemento} & \textbf{Procedimiento de respaldo} \\
+\hline
+Base de datos & Use los \textit{backups} gestionados de Supabase (panel) o \texttt{pg\_dump} contra el \textit{pooler}. \\
+\hline
+\rowcolor{grisTecnico}
+Archivos \texttt{uploads/} & Copie el directorio \ruta{ethoshubB/uploads/} a un almacén seguro. \\
+\hline
+Artefacto anterior & Conserve el JAR de la versión previa para poder revertir. \\
+\hline
+\rowcolor{grisTecnico}
+Variables de entorno & Resguarde el archivo \texttt{.env} (cifrado) usado en el despliegue. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:backup}
+
+\par\vspace{0.2cm}
+La \textbf{reversión de versión} (\textit{rollback}) consiste en volver a desplegar el
+artefacto anterior. Como la persistencia reside en Supabase, el \textit{rollback} del código
+es directo, pero requiere atención a las migraciones:\par
+
+\begin{enumerate}[noitemsep]
+    \item Detenga la versión actual (\comando{docker compose down} o \comando{systemctl stop ethoshub}).
+    \item Despliegue el JAR (o la imagen) de la versión previa conservada.
+    \item Confirme con \comando{/actuator/health} y la lista Go-Live (apartado~\ref{sec:golive}).
+\end{enumerate}
+
+\begin{AvisoAdvertencia}
+Las migraciones de base de datos \textbf{no siempre son reversibles}. Si la versión nueva
+aplicó una migración que la versión previa no comprende, revertir solo el código puede dejar
+el esquema por delante del artefacto. Ante un \textit{rollback} que cruce migraciones,
+coordine con el DBA la reversión del esquema o mantenga la compatibilidad hacia atrás.
+\end{AvisoAdvertencia}
+
+\par\vspace{0.3cm}
+Con el desmantelamiento del servidor y la limpieza del cliente completados, el ciclo de
+vida de la instalación —desde los requisitos del capítulo~\ref{ch:requisitos} hasta la
+reversión— queda íntegramente cubierto por este manual. El operador dispone así de un
+procedimiento reproducible, verificable y reversible, conforme a los principios del
+estándar ISO/IEC/IEEE 15289:2024.\par

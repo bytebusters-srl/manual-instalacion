@@ -1,5 +1,5 @@
 % 03_fonts_colors.tex
-% Configuración de Tipografía y Paleta de Colores
+% Configuración de Tipografía y Paleta de Colores (Manual de Instalación)
 
 % 1. Configuración de Tipografía Base
 \renewcommand{\rmdefault}{ptm} % Cuerpo de Texto: Serif (Times) - 11pt
@@ -7,14 +7,36 @@
 \renewcommand{\ttdefault}{pcr} % Comandos/Código: Monospace (Courier New)
 
 % 2. Paleta de Colores Corporativa (Byte Busters)
-\definecolor{colorPrimario}{HTML}{080852}   % Azul Corporativo / Cyan
+\definecolor{colorPrimario}{HTML}{080852}   % Azul Corporativo
 \definecolor{colorSecundario}{HTML}{4CAF50} % Verde
 \definecolor{colorAcento}{HTML}{FFC107}     % Amarillo
 
-% 3. Paleta Semántica para Manual Técnico
+% 3. Paleta Semántica para Avisos y Cajas
 \definecolor{bgNota}{HTML}{BBDDFC}          % Fondo Notas
-\definecolor{bordeNotaTecnica}{HTML}{2196F3}% Borde azul para Notas Técnicas
+\definecolor{bordeNotaTecnica}{HTML}{2196F3}% Borde azul para Notas de Configuración
 \definecolor{bgAdvertencia}{HTML}{FFEBEE}   % Rojo para Alertas de Seguridad
+\definecolor{bgExito}{HTML}{E8F5E9}         % Verde suave para verificaciones OK
 \definecolor{grisISO}{HTML}{5D6363}         % Gris para cabeceras/pies
 \definecolor{grisTecnico}{HTML}{F5F5F5}     % Fondo para bloques de código
-\definecolor{headerTabla}{HTML}{BBDDFC}     % Fondo para cabeceras de tablas API
+\definecolor{headerTabla}{HTML}{BBDDFC}     % Fondo para cabeceras de tablas
+
+% 4. Paleta para Diagramas (topologías, flujos de instalación, mockups)
+\definecolor{c4Persona}{HTML}{08427B}       % Actores / Operadores
+\definecolor{c4Sistema}{HTML}{1168BD}       % Sistema en foco (monolito)
+\definecolor{c4Contenedor}{HTML}{438DD5}    % Contenedores internos
+\definecolor{c4Componente}{HTML}{85BBF0}    % Componentes
+\definecolor{c4Externo}{HTML}{999999}       % Sistemas externos (gris)
+\definecolor{c4Datos}{HTML}{2E7D32}         % Almacenes de datos (verde BD)
+\definecolor{c4BordeLim}{HTML}{444444}      % Bordes de límites de sistema
+\definecolor{flujoInicio}{HTML}{4CAF50}     % Nodos de inicio/fin en flujos
+\definecolor{flujoDecision}{HTML}{FFC107}   % Rombos de decisión
+\definecolor{bgFail}{HTML}{E53935}          % Nodos de error/fallo en flujos
+\definecolor{codeKeyword}{HTML}{080852}     % Palabras clave en bloques de código
+\definecolor{codeComment}{HTML}{5D6363}     % Comentarios
+\definecolor{codeString}{HTML}{2E7D32}      % Cadenas
+
+% 5. Cromática de mockups de navegador (capítulo 6.3)
+\definecolor{chromeBar}{HTML}{DEE1E6}       % Barra de navegación Chromium
+\definecolor{chromeField}{HTML}{FFFFFF}     % Campo de direcciones
+\definecolor{flagEnabled}{HTML}{1A73E8}     % Selector "Enabled" azul Google
+\definecolor{firefoxBar}{HTML}{F0F0F4}      % Barra de Firefox

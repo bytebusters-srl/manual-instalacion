@@ -1,0 +1,326 @@
+% =============================================================================
+% CAPÍTULO 3 — PREPARACIÓN E INICIALIZACIÓN DEL ENTORNO DE INSTALACIÓN
+% =============================================================================
+\chapter[Preparación e Inicialización]{Preparación e Inicialización del Entorno de Instalación}%
+\label{ch:preparacion}
+\resumenCapitulo{Con los pre-requisitos satisfechos, este capítulo guía la obtención del
+código fuente, la materialización de las credenciales en archivos de configuración y el
+aprovisionamiento de la base de datos. Presenta la matriz completa de variables de
+entorno obligatorias, la estructura de directorios esperada por los scripts de
+construcción y el procedimiento de migraciones sobre Supabase.}
+
+Esta fase es de \textbf{preparación}: no produce todavía un artefacto desplegable, pero
+sienta las bases sin las cuales la construcción del capítulo~\ref{ch:construccion}
+fallará. El orden importa: primero se obtiene el código en la estructura de directorios
+correcta, después se configuran las variables de entorno y, por último, se aprovisiona la
+base de datos.\par
+
+% -----------------------------------------------------------------------------
+\section{Obtención del Código Fuente y Repositorios}%
+\label{sec:codigo}
+
+EthosHub se distribuye en dos repositorios Git independientes pero acoplados:
+\comando{ethoshubB} (backend, que orquesta el \textit{build}) y \comando{ethoshubF}
+(frontend). El primero asume que el segundo es su directorio \textbf{hermano}.\par
+
+\subsection[Clonación y Estructura de Directorios]{Clonación y Estructura Jerárquica de Directorios del Proyecto}%
+\label{sec:clonado}
+
+Clone ambos repositorios dentro de un directorio padre común. La estructura resultante
+debe ser exactamente la de la figura~\ref{fig:arbol}:\par
+
+\begin{lstlisting}[language=bash]
+# 1. Cree el directorio padre y entre en el
+$ mkdir -p ~/Documentos && cd ~/Documentos
+
+# 2. Clone backend y frontend como hermanos
+$ git clone <url-repo>/ethoshubB.git
+$ git clone <url-repo>/ethoshubF.git
+
+# 3. Verifique la estructura
+$ ls -d ethoshub*/
+ethoshubB/  ethoshubF/
+\end{lstlisting}
+
+\vspace{0.2cm}
+\begin{figure}[h!]
+\centering
+\begin{lstlisting}[basicstyle=\ttfamily\scriptsize,numbers=none,frame=single,backgroundcolor=\color{grisTecnico}]
+Documentos/
+|-- ethoshubB/                 # Backend Spring Boot (orquesta el build)
+|   |-- build.sh               # Empaquetado monolitico FE + BE -> JAR
+|   |-- pom.xml                # frontend.dir = ../ethoshubF
+|   |-- Dockerfile             # Imagen runtime (JRE 17 + Tectonic)
+|   |-- docker-compose.yml     # Orquestacion del contenedor
+|   |-- .env.example           # Plantilla de variables del backend
+|   `-- src/main/resources/
+|       |-- application.yml          # Config base (perfil local)
+|       |-- application-prod.yml     # Config de produccion (ignorada por git)
+|       |-- db/migration/V*.sql      # Migraciones SQL versionadas
+|       `-- static/                  # dist del frontend (generado por build.sh)
+`-- ethoshubF/                 # Frontend React + Vite
+    |-- package.json
+    |-- vite.config.ts         # Proxy /api,/auth,/v1 -> :8080
+    |-- .env.example           # Plantilla de variables VITE_*
+    |-- .env.production         # Variables del build de produccion
+    `-- dist/                  # Estaticos compilados (npm run build)
+\end{lstlisting}
+\caption{Estructura jerárquica de directorios esperada. La relación \texttt{../ethoshubF} es obligatoria.}%
+\label{fig:arbol}
+\end{figure}
+
+\begin{AvisoPrecaucion}
+Si su organización exige otra disposición de directorios, deberá ajustar \textbf{dos}
+referencias: la propiedad \comando{<frontend.dir>} del \comando{pom.xml} y la variable
+\comando{FRONTEND\_DIR} de \comando{build.sh}. De lo contrario, el \textit{build} abortará
+con \comando{No se encontró el directorio del frontend}.
+\end{AvisoPrecaucion}
+
+% -----------------------------------------------------------------------------
+\section{Configuración de Variables de Entorno y Credenciales}%
+\label{sec:variables}
+
+EthosHub se configura íntegramente por variables de entorno, siguiendo el principio de
+los «doce factores»: ningún secreto se incrusta en el código. Ambos componentes proveen
+una plantilla (\comando{.env.example}) que debe copiarse y rellenarse.\par
+
+\subsubsection{Obtención de las credenciales de Supabase}
+Antes de rellenar las variables, recupere los valores del panel de Supabase. La
+figura~\ref{fig:supabase-panel} esquematiza la ubicación de cada credencial en
+\comando{Project Settings $\to$ API}.\par
+
+\vspace{0.2cm}
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[font=\sffamily\scriptsize]
+    \fill[grisTecnico, rounded corners=3pt] (0,0) rectangle (12,3.2);
+    \node[anchor=west, font=\sffamily\bfseries\color{colorPrimario}] at (0.3,2.9) {Project Settings $\rightarrow$ API};
+    \fill[white, draw=grisISO!40, rounded corners=2pt] (0.3,2.0) rectangle (11.7,2.6);
+    \node[anchor=west, font=\ttfamily\tiny] at (0.4,2.3) {Project URL: https://<project-ref>.supabase.co  ->  SUPABASE\_URL};
+    \fill[white, draw=grisISO!40, rounded corners=2pt] (0.3,1.3) rectangle (11.7,1.9);
+    \node[anchor=west, font=\ttfamily\tiny] at (0.4,1.6) {anon public:   eyJhbGciOi...  ->  SUPABASE\_ANON\_KEY (publica)};
+    \fill[bgAdvertencia, draw=red!50, rounded corners=2pt] (0.3,0.6) rectangle (11.7,1.2);
+    \node[anchor=west, font=\ttfamily\tiny] at (0.4,0.9) {service\_role: eyJhbGciOi...  ->  SERVICE\_ROLE\_KEY (SECRETA)};
+    \node[anchor=west, font=\ttfamily\tiny] at (0.4,0.25) {JWT Keys -> .well-known/jwks.json  ->  JWK\_SET\_URI};
+\end{tikzpicture}
+\caption{Ubicación de las credenciales de Supabase en el panel y su correspondencia con las variables de entorno.}%
+\label{fig:supabase-panel}
+\end{figure}
+
+\begin{enumerate}[noitemsep]
+    \item Inicie sesión en el panel de Supabase y seleccione el proyecto de EthosHub.
+    \item Abra \comando{Project Settings $\to$ API}.
+    \item Copie \textit{Project URL} a \comando{SUPABASE\_URL} (y \comando{VITE\_SUPABASE\_URL}).
+    \item Copie la clave \textit{anon public} a \comando{SUPABASE\_ANON\_KEY} (y \comando{VITE\_SUPABASE\_ANON\_KEY}).
+    \item Copie la clave \textit{service\_role} a \comando{SUPABASE\_SERVICE\_ROLE\_KEY} (solo backend).
+    \item Construya la URL de JWKS añadiendo \comando{/auth/v1/.well-known/jwks.json} a la URL del proyecto.
+\end{enumerate}
+
+\subsubsection{Obtención de las credenciales de Google}
+Para la importación desde Drive, cree las credenciales en Google Cloud Console:\par
+\begin{enumerate}[noitemsep]
+    \item En \textit{APIs y servicios}, habilite \textbf{Google Picker API} y \textbf{Google Drive API}.
+    \item Cree una \textit{API Key} y cópiela a \comando{VITE\_GOOGLE\_API\_KEY}.
+    \item Cree un \textit{OAuth Client ID} de tipo «Aplicación web» y cópielo a \comando{VITE\_GOOGLE\_CLIENT\_ID}.
+    \item En el cliente OAuth, añada el dominio de despliegue a \textit{Orígenes autorizados de JavaScript}.
+    \item Para la IA, genere la \comando{GEMINI\_API\_KEY} en Google AI Studio.
+\end{enumerate}
+
+\subsection{Configuración del Archivo de Entorno del Frontend (\texttt{.env.production})}%
+\label{subsec:env-frontend}
+
+El \textit{frontend} solo expone al navegador las variables con prefijo \comando{VITE\_}
+(son \textbf{públicas} por diseño). En el monolito, el \textit{frontend} es
+\textit{same-origin} con la API, por lo que \comando{VITE\_API\_URL} se deja \textbf{vacía}
+y Axios usa la ruta relativa \comando{/api}. El archivo \comando{.env.production} del
+repositorio contiene los valores reales de evaluación:\par
+
+\begin{lstlisting}[language=bash]
+# ethoshubF/.env.production
+# En el monolito el frontend es same-origin: VITE_API_URL vacia -> baseURL '/api'.
+VITE_API_URL=
+VITE_SUPABASE_URL=https://rhtckjqndnulvytloxfp.supabase.co
+VITE_SUPABASE_ANON_KEY=sb_publishable_RwG7o_L8BXIbWiQg9kqIlg__4LszF2j
+
+# Google Drive Picker (credenciales publicas de cliente)
+VITE_GOOGLE_API_KEY=AIza...redactada
+VITE_GOOGLE_CLIENT_ID=5527...redactada.apps.googleusercontent.com
+\end{lstlisting}
+
+\begin{AlertaSeguridad}
+Únicamente la \comando{ANON\_KEY} y las claves de Google (de cliente) pueden residir en
+archivos \comando{VITE\_*}. \textbf{Nunca} coloque aquí la \comando{SERVICE\_ROLE\_KEY} ni
+la \comando{GEMINI\_API\_KEY}: ambas viajarían al navegador en texto plano dentro del
+\textit{bundle} de JavaScript. Esas claves pertenecen exclusivamente al backend
+(apartado~\ref{subsec:env-backend}).
+\end{AlertaSeguridad}
+
+\subsection[Propiedades del Backend (application.yml)]{Configuración de las Propiedades de la Aplicación del Backend (\texttt{applica\-tion.yml} / \texttt{.env})}%
+\label{subsec:env-backend}
+
+El backend lee su configuración de \comando{application.yml} mediante \textit{placeholders}
+\comando{\$\{VAR:valor\}}. En despliegue basta con \textbf{exportar las variables de
+entorno} o proveer un archivo \comando{.env} (copia de \comando{.env.example}). El extracto
+siguiente muestra las claves esenciales:\par
+
+\begin{lstlisting}[language=bash]
+# ethoshubB/.env (copiado de .env.example)
+SERVER_PORT=8080
+SPRING_PROFILES_ACTIVE=prod
+
+# Supabase
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...          # SECRETO: solo backend
+# Validacion de JWT (defina UNO): JWKS (RS256) recomendado
+SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=https://<ref>.supabase.co/auth/v1/.well-known/jwks.json
+
+# IA (CV Studio + Recruiter Insights). Sin ella, esos endpoints devuelven 500.
+GEMINI_API_KEY=...
+\end{lstlisting}
+
+\begin{NotaConfiguracion}
+El perfil \comando{prod} se materializa en \comando{application-prod.yml}, que está
+\textbf{ignorado por git} y usa \textit{placeholders} \comando{\$\{VAR\}} sin valor por
+defecto. En producción se activa con \comando{SPRING\_PROFILES\_ACTIVE=prod} o el
+argumento \comando{-{}-spring.profiles.active=prod}. La validación de JWT admite dos
+modos: HS256 (secreto compartido \comando{SUPABASE\_JWT\_SECRET}) o RS256 (JWKS); este
+manual usa JWKS por ser el más robusto.
+\end{NotaConfiguracion}
+
+\subsection{Matriz de Variables Obligatorias}%
+\label{subsec:matriz-variables}
+
+La tabla~\ref{tab:matriz-vars} consolida \textbf{todas} las variables de entorno del
+sistema, su componente, si son obligatorias y el origen del valor. Es la referencia
+maestra de configuración: complétela antes de construir.\par%
+\label{tab:matriz-vars}
+\begin{TablaVariables}
+VITE\_API\_URL & \textit{Frontend.} URL base de la API. \textbf{Vacía} en el monolito (ruta relativa \texttt{/api}). & No \\
+\hline
+VITE\_SUPABASE\_URL & \textit{Frontend.} URL del proyecto Supabase. & Sí \\
+\hline
+VITE\_SUPABASE\_ANON\_KEY & \textit{Frontend.} Clave anon pública (protegida por RLS). & Sí \\
+\hline
+VITE\_GOOGLE\_CLIENT\_ID & \textit{Frontend.} OAuth Client ID del Google Drive Picker. & No \\
+\hline
+VITE\_GOOGLE\_API\_KEY & \textit{Frontend.} API Key de Google Picker / Drive. & No \\
+\hline
+SUPABASE\_URL & \textit{Backend.} URL del proyecto Supabase. & Sí \\
+\hline
+SUPABASE\_ANON\_KEY & \textit{Backend.} Clave anon para operaciones de cliente. & Sí \\
+\hline
+SUPABASE\_SERVICE\_ROLE\_KEY & \textit{Backend.} Clave admin (secreta). Acceso total saltando RLS. & Sí \\
+\hline
+JWK\_SET\_URI & \textit{Backend.} JWKS de Supabase para validar firmas JWT. & Sí \\
+\hline
+GEMINI\_API\_KEY & \textit{Backend.} Clave de Google Gemini (IA). Sin ella, IA devuelve 500. & Parcial \\
+\hline
+SERVER\_PORT & \textit{Backend.} Puerto HTTP del servicio. Por defecto \texttt{8080}. & No \\
+\hline
+SPRING\_PROFILES\_ACTIVE & \textit{Backend.} Perfil activo: \texttt{local} o \texttt{prod}. & Sí \\
+\hline
+\end{TablaVariables}
+
+\begin{PuntoNoRetorno}
+Las credenciales que en su día estuvieron en texto plano \textbf{permanecen en el
+historial de git}. Externalizarlas a variables de entorno \textbf{no las borra del
+pasado}. Antes de exponer el repositorio o de pasar a producción real, \textbf{rote todas
+las claves expuestas} (contraseña de BD, \texttt{service-role key}, claves de IA,
+contraseña SMTP). Esta acción es obligatoria por seguridad.
+\end{PuntoNoRetorno}
+
+% -----------------------------------------------------------------------------
+\section{Inicialización y Aprovisionamiento de la Base de Datos Relacional}%
+\label{sec:bd}
+
+EthosHub opera sobre el esquema \comando{core} de un PostgreSQL gestionado por Supabase.
+El aprovisionamiento consiste en aplicar las migraciones SQL versionadas sobre el proyecto
+Supabase de destino.\par
+
+\subsection{Estructura del Esquema y Migraciones de Datos}%
+\label{subsec:migraciones}
+
+Las migraciones residen en \ruta{ethoshubB/src/main/resources/db/migration/} con la
+convención \comando{V<n>\_\_descripcion.sql} (estilo Flyway). Se aplican en orden
+ascendente. La tabla~\ref{tab:migraciones} resume su contenido funcional.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.3}
+\fontsize{8.5}{10.2}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\ttfamily\bfseries\color{colorPrimario}}c|X|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Migración} & \sffamily\textbf{Contenido} \\
+\hline
+V1 & Campos geográficos en experiencias laborales. \\
+\hline
+\rowcolor{grisTecnico}
+V2 & Soft-delete de documentos de CV. \\
+\hline
+V3 / V14 & Conexiones de perfil (V14: enfoque URL-first, +15 \textit{providers} + custom). \\
+\hline
+\rowcolor{grisTecnico}
+V4 / V5 & Ajustes extendidos de portafolio y currículum PDF público. \\
+\hline
+V6 & Fases de Talent Discovery (Kanban, notas, \textit{dashboard}). \\
+\hline
+\rowcolor{grisTecnico}
+V7 / V8 & Idempotencia de mensajes y RPCs seguros de \textit{pipeline}/notas. \\
+\hline
+V9 / V10 / V11 & Soft-delete de hard skills, RPCs y \textit{fixes} de chat/perfil. \\
+\hline
+\rowcolor{grisTecnico}
+V12 / V13 & Sincronización de cambio de email a \texttt{core.profiles}. \\
+\hline
+V15 & Política de SELECT para \textit{likes} de perfil. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:migraciones}
+
+\par\vspace{0.2cm}
+Aplique las migraciones contra Supabase con \comando{psql} o desde el editor SQL del panel.
+Con \comando{psql}, en orden:\par
+
+\begin{lstlisting}[language=bash]
+# Sustituya la cadena de conexion por la de su proyecto (pooler de Supabase)
+$ export PGURL="postgresql://postgres:<password>@<host>:5432/postgres"
+$ for f in src/main/resources/db/migration/V*.sql; do
+    echo ">> Aplicando $f"; psql "$PGURL" -v ON_ERROR_STOP=1 -f "$f";
+  done
+\end{lstlisting}
+
+\begin{AvisoAdvertencia}
+Aplique las migraciones \textbf{en orden ascendente} y sobre el proyecto correcto. Revise
+cada script antes de ejecutarlo en un entorno compartido: algunas crean funciones
+\texttt{SECURITY DEFINER} y políticas RLS que afectan a todos los usuarios. Una ejecución
+desordenada o sobre el proyecto equivocado puede dejar el esquema inconsistente (síntoma
+tratado en el apartado~\ref{sec:error-jooq}).
+\end{AvisoAdvertencia}
+
+\subsection[Pruebas Automatizadas (Testcontainers)]{Configuración del Entorno de Pruebas Automatizadas (Uso de Testcontainers con PostgreSQL real)}%
+\label{sec:testcontainers}
+
+Las pruebas de integración del backend no usan una base de datos simulada: levantan un
+\textbf{PostgreSQL real y efímero} mediante \textbf{Testcontainers}. Esto garantiza que el
+SQL tipado de jOOQ se valide contra un motor auténtico. El único requisito es que el
+demonio de Docker esté activo; el contenedor se crea y destruye automáticamente.\par
+
+\begin{lstlisting}[language=bash]
+# Ejecuta el conjunto de pruebas (levanta PostgreSQL via Testcontainers)
+$ cd ethoshubB
+$ mvn test
+\end{lstlisting}
+
+\begin{VerificacionOK}
+Durante \comando{mvn test} verá en el log líneas de Testcontainers creando un contenedor
+\comando{postgres:15}. Al finalizar, la suite reporta \comando{BUILD SUCCESS}. El perfil
+\comando{prod} omite estas pruebas (\comando{skipTests}) para acelerar el empaquetado de
+despliegue, como se detalla en el capítulo~\ref{ch:construccion}.
+\end{VerificacionOK}
+
+\par\vspace{0.2cm}
+Con el código en su sitio, las variables configuradas y la base de datos aprovisionada,
+el entorno está listo para la construcción del artefacto, objeto del
+capítulo~\ref{ch:construccion}.\par

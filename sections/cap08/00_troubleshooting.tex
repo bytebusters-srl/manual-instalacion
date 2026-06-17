@@ -1,0 +1,242 @@
+% =============================================================================
+% CAPÍTULO 8 — GESTIÓN DE INCIDENTES, FALLOS Y DIAGNÓSTICO (TROUBLESHOOTING)
+% =============================================================================
+\chapter[Gestión de Incidentes y Diagnóstico]{Gestión de Incidentes, Fallos y Diagnóstico}%
+\label{ch:troubleshooting}
+\resumenCapitulo{Ningún despliegue está libre de incidencias. Este capítulo cataloga los
+fallos más frecuentes de la instalación de EthosHub, organizados por su origen: ausencia de
+claves de servicios externos, desalineación entre el esquema de base de datos y las clases
+tipadas, y caché obsoleta tras construcciones incompletas. Cada incidente se presenta con
+su síntoma, su causa y su mitigación.}
+
+El diagnóstico parte siempre de la \textbf{evidencia}: los \textit{logs}. El backend
+registra en \ruta{ethoshubB/backend.log} y en la salida del contenedor
+(\comando{docker compose logs -f}). Antes de aplicar cualquier mitigación, localice en el
+\textit{log} la traza del error; el código HTTP y la excepción Java suelen identificar la
+causa con precisión. La tabla de referencia rápida siguiente cataloga los incidentes más
+habituales con su síntoma, su causa y su mitigación.\par
+
+\vspace{0.2cm}
+\begin{TablaErrores}
+\texttt{Port 8080 was already in use} & Otro proceso ocupa el puerto 8080. & Identifique el proceso (\texttt{ss -ltnp | grep 8080}) y deténgalo, o cambie \texttt{SERVER\_PORT}. \\
+\hline
+\texttt{No se encontró el directorio del frontend} & \texttt{ethoshubF} no es hermano de \texttt{ethoshubB}. & Ajuste \texttt{frontend.dir} (pom.xml) y \texttt{FRONTEND\_DIR} (build.sh). Ver~\ref{sec:clonado}. \\
+\hline
+\texttt{Se requiere JDK 17+} & Versión de Java inferior a 17. & Instale/active JDK 17. Ver~\ref{subsec:jdk}. \\
+\hline
+\texttt{La carpeta dist/ no existe} & \texttt{npm run build} falló silenciosamente. & Ejecute el build del frontend por separado y corrija errores de \texttt{tsc}. Ver~\ref{subsec:npm-build}. \\
+\hline
+\texttt{status: DOWN} en \texttt{/health} & Base de datos inaccesible. & Verifique variables de Supabase y conectividad al \textit{pooler} (5432). \\
+\hline
+HTTP 401 inesperado & JWT ausente, expirado o JWKS mal configurado. & Revise \texttt{JWK\_SET\_URI} y que FE/BE apunten al mismo proyecto. Ver~\ref{subsec:jwt}. \\
+\hline
+HTTP 500 en \texttt{/ai-assist} & \texttt{GEMINI\_API\_KEY} ausente o inválida. & Defina la clave; revise el mapeo de \texttt{AiServiceException}. Ver~\ref{sec:degradacion-ia}. \\
+\hline
+SPA carga en blanco & \texttt{static/} vacío o caché obsoleta. & Reconstruya con \texttt{build.sh} y limpie la caché del navegador. Ver~\ref{sec:error-cache}. \\
+\hline
+Cámara/micrófono bloqueados & Origen HTTP inseguro. & Aplique las excepciones de navegador. Ver~\ref{sec:pwa-http}. \\
+\hline
+Excepción de columna jOOQ & Esquema y clases generadas desalineados. & Regenere el código jOOQ tras migrar. Ver~\ref{sec:error-jooq}. \\
+\hline
+\end{TablaErrores}
+
+% -----------------------------------------------------------------------------
+\section{Degradación del Servicio por Ausencia de Claves Externas}%
+\label{sec:degradacion-externas}
+
+El sistema está diseñado para \textbf{degradar de forma controlada} cuando falta una clave
+de servicio externo, en lugar de caer por completo. La criticidad de cada ausencia se
+resume en la tabla~\ref{tab:degradacion}.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\ttfamily\bfseries\color{colorPrimario}}l|X|c|}
+\hline
+\rowcolor{headerTabla}
+\sffamily\textbf{Clave ausente} & \sffamily\textbf{Efecto} & \sffamily\textbf{Severidad} \\
+\hline
+SUPABASE\_* & El sistema no autentica ni persiste: caída funcional. & Crítica \\
+\hline
+\rowcolor{grisTecnico}
+GEMINI\_API\_KEY & Solo fallan los \textit{endpoints} de IA; el resto opera. & Media \\
+\hline
+VITE\_GOOGLE\_* & Solo se deshabilita la importación desde Drive. & Baja \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:degradacion}
+
+\subsection[Errores de Conexión con Gemini]{Mitigación de Errores Críticos (HTTP 500) por Falla de Conexión con Google Gemini API}%
+\label{sec:degradacion-ia}
+
+Cuando \comando{GEMINI\_API\_KEY} falta, es inválida o Gemini está caído, los
+\textit{endpoints} de IA fallan. El backend evita devolver un \comando{500} genérico
+gracias a \comando{AiServiceException}, que traduce el error \textit{upstream} a un código
+HTTP significativo, según la tabla~\ref{tab:gemini-map}.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|c|c|X|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Estado de Gemini} & \textbf{HTTP devuelto} & \textbf{Interpretación} \\
+\hline
+429 (rate limit) & 429 & Cuota de IA agotada; reintente más tarde. \\
+\hline
+\rowcolor{grisTecnico}
+5xx (caído) & 503 & Servicio de IA temporalmente no disponible. \\
+\hline
+Otros & 502 & Error de pasarela hacia el proveedor de IA. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:gemini-map}
+
+\par\vspace{0.2cm}
+\textbf{Mitigación, paso a paso:}\par
+\begin{enumerate}[noitemsep]
+    \item Confirme que la variable está definida en el entorno del backend: \comando{echo \$GEMINI\_API\_KEY}.
+    \item Si está vacía, defínala y reinicie el servicio.
+    \item Si está definida y aún falla, valide la clave en Google AI Studio (puede estar revocada o sin cuota).
+    \item Observe el código HTTP devuelto: un \comando{429} es un problema de cuota, no de configuración.
+\end{enumerate}
+
+\begin{NotaConfiguracion}
+La ausencia de la clave de Gemini \textbf{no impide arrancar} el sistema ni afecta a la
+autenticación, los portafolios o el reclutamiento no asistido. Si su evaluación no requiere
+las funciones de IA, puede desplegar sin esta clave y los \textit{endpoints} afectados
+degradarán de forma aislada.
+\end{NotaConfiguracion}
+
+% -----------------------------------------------------------------------------
+\section{Errores en la Sincronización de Persistencia Tipada}%
+\label{sec:persistencia}
+
+EthosHub usa jOOQ, que genera clases Java a partir del esquema. La fuente de la verdad es
+el esquema; las clases son su reflejo. Cuando ambos divergen, surgen errores difíciles de
+diagnosticar si no se conoce esta relación.\par
+
+\subsection[Desalineación de Esquema y Clases jOOQ]{Desalineación del Esquema de Base de Datos PostgreSQL con las Clases Generadas por jOOQ}%
+\label{sec:error-jooq}
+
+El síntoma típico es una excepción en tiempo de ejecución o de compilación que menciona una
+columna o tabla inexistente, tras haber aplicado una migración nueva sin regenerar el
+código jOOQ. La figura~\ref{fig:jooq-sync} ilustra la causa.\par
+
+\vspace{0.3cm}
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[node distance=1.0cm and 2.0cm, font=\sffamily\scriptsize]
+    \node[c4datos, minimum width=2.4cm] (db) {Esquema \texttt{core}\\\scriptsize (migración V$n$)};
+    \node[c4componente, right=of db, minimum width=2.8cm] (clases) {Clases jOOQ\\\scriptsize (generadas)};
+    \node[flujoFin, below=1.1cm of clases] (err) {Excepción\\\scriptsize columna inexistente};
+    \draw[c4flecha] (db) -- node[c4etiqueta, above]{genera} (clases);
+    \draw[c4flecha, dashed, red!70!black] (db) -- node[c4etiqueta, right, text=red!70!black]{si NO se regenera} (err);
+\end{tikzpicture}
+\caption{Desalineación jOOQ: una migración aplicada sin regenerar las clases provoca excepciones de columna inexistente.}%
+\label{fig:jooq-sync}
+\end{figure}
+
+\textbf{Mitigación:}\par
+\begin{enumerate}[noitemsep]
+    \item Confirme que la migración se aplicó correctamente sobre el proyecto Supabase correcto.
+    \item Regenere las clases jOOQ contra el esquema actualizado (apartado~\ref{subsec:jooq}).
+    \item Vuelva a empaquetar el JAR (\comando{build.sh}).
+    \item Verifique que el error desaparece consultando el \textit{endpoint} afectado.
+\end{enumerate}
+
+\begin{AvisoAdvertencia}
+No «parchee» el síntoma editando manualmente las clases generadas: se sobrescriben en la
+siguiente regeneración. La única corrección sostenible es \textbf{regenerar} a partir del
+esquema correcto. Mantenga sincronizados, en todo momento, las migraciones aplicadas y el
+código jOOQ empaquetado.
+\end{AvisoAdvertencia}
+
+% -----------------------------------------------------------------------------
+\section{Conflictos de Desincronización en la Actualización de Recursos}%
+\label{sec:recursos}
+
+El último grupo de incidencias afecta a los recursos estáticos del \textit{frontend} y a su
+cacheo.\par
+
+\subsection[Caché Obsoleta tras build.sh Incompleto]{Persistencia de Caché Obsoleta en el Navegador tras Ejecuciones Incompletas del Script \texttt{build.sh}}%
+\label{sec:error-cache}
+
+Si \comando{build.sh} se interrumpe entre la limpieza de \comando{static/} y la copia del
+nuevo \comando{dist/}, el JAR puede empaquetarse con estáticos incompletos o con una mezcla
+de versiones. El síntoma es una SPA que carga en blanco, muestra \textit{assets} antiguos o
+referencia archivos JavaScript que ya no existen (errores 404 en la consola del navegador).\par
+
+\textbf{Mitigación, paso a paso:}\par
+\begin{enumerate}[noitemsep]
+    \item Ejecute \comando{build.sh} \textbf{completo}, sin interrupciones, para regenerar \comando{dist/} y \comando{static/} de forma consistente.
+    \item Confirme que \comando{static/} contiene \comando{index.html} y \comando{assets/} actualizados (apartado~\ref{subsec:i18next}).
+    \item En el navegador, fuerce una recarga sin caché (\comando{Ctrl+Shift+R}) o purgue el almacenamiento del sitio.
+    \item Si persiste, limpie \comando{localStorage} y \comando{sessionStorage} del dominio (capítulo~\ref{ch:desinstalacion}).
+\end{enumerate}
+
+\begin{VerificacionOK}
+Tras una reconstrucción completa y una recarga sin caché, la SPA debe cargar la versión
+más reciente. La separación del \textit{chunk} \comando{vendor} ayuda a que el navegador
+solo redescargue lo que cambió, pero una limpieza explícita de caché elimina cualquier
+residuo de \textit{builds} anteriores.
+\end{VerificacionOK}
+
+% -----------------------------------------------------------------------------
+\section{Metodología General de Diagnóstico}%
+\label{sec:metodologia}
+
+Ante un fallo no catalogado, aplique un razonamiento por descarte de lo más externo a lo
+más interno, según el árbol de decisión de la figura~\ref{fig:diag}. La pregunta clave es
+\textit{¿hasta qué capa llega la petición?}: si \comando{/actuator/health} responde, el
+proceso vive y el problema es de configuración o de un servicio externo; si no responde, el
+fallo es de arranque.\par
+
+\vspace{0.3cm}
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[node distance=0.7cm and 1.1cm, font=\sffamily\scriptsize]
+    \node[flujoInicio] (ini) {Fallo};
+    \node[flujoDecision, below=of ini] (health) {¿\texttt{/health} UP?};
+    \node[flujoProceso, right=1.6cm of health] (logs) {Revisar logs\\\scriptsize arranque};
+    \node[flujoDecision, below=of health] (auth) {¿401/403?};
+    \node[flujoProceso, right=1.6cm of auth] (jwt) {Revisar JWKS\\\scriptsize y proyecto Supabase};
+    \node[flujoDecision, below=of auth] (ia) {¿Error IA?};
+    \node[flujoProceso, right=1.6cm of ia] (gem) {Revisar\\\scriptsize GEMINI\_API\_KEY};
+    \node[flujoProceso, below=of ia] (ui) {Revisar \texttt{static/}\\\scriptsize y cache};
+
+    \draw[flujoFlecha] (ini) -- (health);
+    \draw[flujoFlecha] (health) -- node[c4etiqueta, above]{no} (logs);
+    \draw[flujoFlecha] (health) -- node[c4etiqueta, left]{sí} (auth);
+    \draw[flujoFlecha] (auth) -- node[c4etiqueta, above]{sí} (jwt);
+    \draw[flujoFlecha] (auth) -- node[c4etiqueta, left]{no} (ia);
+    \draw[flujoFlecha] (ia) -- node[c4etiqueta, above]{sí} (gem);
+    \draw[flujoFlecha] (ia) -- node[c4etiqueta, left]{no} (ui);
+\end{tikzpicture}
+\caption{Árbol de decisión para el diagnóstico de incidencias, de la capa más externa (salud) a la más interna (recursos estáticos).}%
+\label{fig:diag}
+\end{figure}
+
+\par\vspace{0.2cm}
+Los pasos sistemáticos para aislar cualquier incidente son:\par
+\begin{enumerate}[noitemsep]
+    \item \textbf{Reproduzca} el fallo y anote el código HTTP exacto y el mensaje.
+    \item \textbf{Localice} la traza en el \textit{log} (\comando{docker compose logs -f} o \ruta{backend.log}).
+    \item \textbf{Clasifique} el origen con la figura~\ref{fig:diag}: arranque, seguridad, IA o recursos.
+    \item \textbf{Aplique} la mitigación del catálogo y \textbf{verifique} que el síntoma desaparece.
+    \item \textbf{Registre} la incidencia y su resolución para la trazabilidad del despliegue.
+\end{enumerate}
+
+\begin{AvisoNota}
+La mayoría de los incidentes de instalación se reducen a tres causas raíz: una
+\textbf{variable de entorno} ausente o errónea, una \textbf{versión} de herramienta
+incorrecta o un \textbf{servicio externo} inalcanzable. Verifíquelas en ese orden antes de
+profundizar en hipótesis más complejas.
+\end{AvisoNota}
+
+\par\vspace{0.2cm}
+Cuando la resolución de un incidente exige rehacer el despliegue desde cero, o cuando se
+concluye la evaluación, procede aplicar los protocolos de desinstalación y reversión del
+capítulo~\ref{ch:desinstalacion}.\par

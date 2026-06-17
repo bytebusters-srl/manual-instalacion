@@ -1,78 +1,66 @@
 % main.tex
-% Estructura Principal - Manual de Instalación ISO/IEC/IEEE 15289:2024
+% Manual de Instalación — Plataforma EthosHub v2.0.0
+% Estándar ISO/IEC/IEEE 15289:2024 e IEEE 830
 
-\documentclass[11pt, a4paper, twoside]{report} 
+\documentclass[11pt, a4paper, twoside]{report}
 
+% ==========================================
+% CARGA DE CONFIGURACIONES
+% ==========================================
 \input{config/01_packages}
 \input{config/03_fonts_colors}
 \input{config/02_layout}
 \input{config/04_macros}
 
+% ==========================================
+% METADATOS DE TRAZABILIDAD DOCUMENTAL
+% ==========================================
+\setDocID{MI-INST-ETHOSHUB-2.0.0}
+\setDocEstado{Aprobado}
+\setAmbiente{Producción}
+
 \begin{document}
 
 % ==========================================
-% PORTADA Y TABLA DE CONTENIDOS
+% PORTADA
 % ==========================================
-\include{sections/00_portada}
+\include{sections/front/00_portada}
 
+% ==========================================
+% TABLA DE CONTENIDOS
+% ==========================================
 \clearpage
 \begingroup
   \makeatletter \let\ps@plain\ps@empty \makeatother
-  \pagestyle{empty} 
+  \pagestyle{empty}
   \tableofcontents
   \clearpage
 \endgroup
 
-\pagestyle{fancy}   
-\setcounter{page}{1} 
+\pagestyle{fancy}
+\setcounter{page}{1}
 
 % ==========================================
-% CONSISTENCIA Y TRAZABILIDAD (ISO 15289)
+% FRONT MATTER (ISO 15289)
 % ==========================================
-\chapter*{Consistencia y Trazabilidad}
-\addcontentsline{toc}{chapter}{Consistencia y Trazabilidad}
-% Matriz de Compatibilidad (Versiones OS, DB).
-% Trazabilidad de Requisitos de Infraestructura.
-% Ubicación de Logs de Instalación (.log).
+\include{sections/front/01_historial}   % Historial, roles y trazabilidad
 
 % ==========================================
-% 1. IDENTIFICACIÓN DEL SISTEMA
+% CONTENIDO DEL MANUAL (Índice maestro)
 % ==========================================
-\chapter{Identificación del Sistema}
-% Nombre del producto, versión del instalador y plataformas destino.
+\include{sections/cap01/00_introduccion}   % 1. Introducción y disposiciones generales
+\include{sections/cap02/00_requisitos}      % 2. Requisitos previos y entorno de operación
+\include{sections/cap03/00_preparacion}     % 3. Preparación e inicialización del entorno
+\include{sections/cap04/00_construccion}    % 4. Ciclo de construcción y compilación
+\include{sections/cap05/00_despliegue}      % 5. Procedimientos de despliegue y ejecución
+\include{sections/cap06/00_seguridad}       % 6. Configuración avanzada, seguridad y hardware
+\include{sections/cap07/00_verificacion}    % 7. Protocolo de verificación e inspección
+\include{sections/cap08/00_troubleshooting} % 8. Gestión de incidentes y diagnóstico
+\include{sections/cap09/00_desinstalacion}  % 9. Desinstalación, limpieza y reversión
 
 % ==========================================
-% 2. REQUISITOS DEL SISTEMA (IEEE 830)
+% ANEXOS (material de referencia)
 % ==========================================
-\chapter{Requisitos del Sistema}
-% ==========================================
-% 3. PREPARACIÓN DEL ENTORNO
-% ==========================================
-\chapter{Preparación del Entorno}
-% Backups de sistemas existentes y limpieza de registros.
-
-% ==========================================
-% 4. PROCEDIMIENTO DE INSTALACIÓN
-% ==========================================
-\chapter{Procedimiento de Instalación}
-% Guía cronológica y capturas de pantalla.
-
-% ==========================================
-% 5. CONFIGURACIÓN POST-INSTALACIÓN
-% ==========================================
-\chapter{Configuración Post-Instalación}
-% Ajuste de variables de entorno (.env) y credenciales.
-
-% ==========================================
-% 6. VERIFICACIÓN Y PRUEBAS DE HUMO
-% ==========================================
-\chapter{Verificación y Pruebas de Humo}
-% Revisión de logs y confirmación de servicios activos.
-
-% ==========================================
-% 7. SOLUCIÓN DE PROBLEMAS DE INSTALACIÓN
-% ==========================================
-\chapter{Solución de Problemas}
-% Tabla de errores comunes de despliegue y soluciones.
+\include{sections/anexos/00_anexos}
 
 \end{document}

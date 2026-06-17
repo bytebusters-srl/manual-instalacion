@@ -1,0 +1,124 @@
+% =============================================================================
+% HISTORIAL DE REVISIONES, ROLES Y TRAZABILIDAD (ISO/IEC/IEEE 15289:2024)
+% =============================================================================
+\chapter*{Historial de Revisiones y Trazabilidad}
+\addcontentsline{toc}{chapter}{Historial de Revisiones y Trazabilidad}
+\markboth{Historial de Revisiones y Trazabilidad}{}
+
+El presente documento constituye un \textbf{procedimiento de instalación}, uno de los
+productos de información del ciclo de vida del software definidos por el estándar
+\textbf{ISO/IEC/IEEE 15289:2024}. Su elaboración, revisión y aprobación quedan trazadas
+en los registros siguientes, garantizando la integridad y la responsabilidad
+(\textit{accountability}) sobre cada versión emitida del instalador y de esta guía.\par
+
+\section*{Control de Versiones del Documento}
+\noindent
+\renewcommand{\arraystretch}{1.4}
+\fontsize{9}{10.8}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|c|c|X|c|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Versión} & \textbf{Fecha} & \textbf{Descripción del cambio} & \textbf{Estado} \\
+\hline
+0.1.0 & 2026-04-12 & Estructura inicial de la guía de instalación y definición del índice maestro alineado a ISO 15289. & Borrador \\
+\hline
+\rowcolor{grisTecnico}
+0.6.0 & 2026-05-15 & Procedimientos de pre-requisitos, variables de entorno y compilación monolítica (\comando{build.sh}). & En revisión \\
+\hline
+1.0.0 & 2026-05-31 & Despliegue con Docker Compose, verificación con Actuator/Swagger y troubleshooting. & Aprobado \\
+\hline
+\rowcolor{grisTecnico}
+1.1.0 & 2026-06-17 & Excepciones PWA de cámara/micrófono en HTTP, flujo URL-first de conexiones e \textit{insights} de IA del reclutador. & Aprobado \\
+\hline
+2.0.0 & 2026-06-17 & Versión mayor: actualización de los componentes \texttt{ethoshubB} y \texttt{ethoshubF} a 2.0.0 y de la imagen de despliegue (\comando{ethoshub:2.0.0}). & Aprobado \\
+\hline
+\end{tabularx}\normalfont\normalsize
+\par\vspace{0.5cm}
+
+\section*{Roles del Equipo de Despliegue}
+La elaboración y validación de esta guía fue responsabilidad del equipo de
+\textbf{Byte Busters S.R.L.}, con la asignación de roles que se detalla a continuación.\par
+\noindent
+\renewcommand{\arraystretch}{1.4}
+\fontsize{9}{10.8}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|X|c|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Rol} & \textbf{Responsabilidad sobre la instalación} & \textbf{Validación} \\
+\hline
+DevOps / Release Manager & Empaquetado monolítico, imagen Docker, orquestación y publicación del artefacto. & Despliegue \\
+\hline
+\rowcolor{grisTecnico}
+Líder de Backend & Configuración del \textit{Resource Server}, perfiles Spring y variables del backend. & Backend \\
+\hline
+Líder de Frontend & Compilación de la SPA, variables \texttt{VITE\_*} y verificación de \textit{assets}. & Frontend \\
+\hline
+\rowcolor{grisTecnico}
+DBA & Aprovisionamiento de Supabase/PostgreSQL, migraciones y políticas RLS. & Base de Datos \\
+\hline
+QA Lead & Protocolo de verificación, pruebas de humo y trazabilidad de incidentes. & V\&V \\
+\hline
+\end{tabularx}\normalfont\normalsize
+\par\vspace{0.4cm}
+
+\begin{NotaConfiguracion}
+Este documento es de carácter \textbf{confidencial} y está dirigido al personal de
+infraestructura de Byte Busters S.R.L. y a los evaluadores autorizados de la convocatoria
+CPTIS-2302-2026. Su identificador de trazabilidad es \comando{MI-INST-ETHOSHUB-2.0.0}.
+\end{NotaConfiguracion}
+
+\clearpage
+% =============================================================================
+% CONSISTENCIA Y TRAZABILIDAD DE LA INSTALACIÓN
+% =============================================================================
+\section*{Consistencia y Trazabilidad}
+\markboth{Consistencia y Trazabilidad}{}
+
+Conforme al estándar ISO/IEC/IEEE 15289:2024, todo procedimiento descrito en esta guía
+es \textbf{trazable a un artefacto concreto} del producto: un script (\comando{build.sh}),
+un archivo de configuración (\comando{application.yml}, \comando{.env.production}), un
+descriptor de contenedor (\comando{Dockerfile}, \comando{docker-compose.yml}) o un
+\textit{endpoint} verificable. La tabla~\ref{tab:matriz-consistencia} resume la matriz de
+consistencia entre las fases de instalación, su artefacto de origen y el capítulo que las
+documenta.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|l|X|c|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Fase} & \textbf{Artefacto de origen} & \textbf{Producto de información} & \textbf{Cap.} \\
+\hline
+Pre-requisitos & \texttt{pom.xml}, \texttt{package.json} & Matriz de hardware, software y red. & 2 \\
+\hline
+\rowcolor{grisTecnico}
+Preparación & \texttt{.env.production}, \texttt{application.yml} & Variables de entorno y aprovisionamiento de BD. & 3 \\
+\hline
+Construcción & \texttt{build.sh}, \texttt{pom.xml} & Compilación FE+BE y empaquetado del JAR. & 4 \\
+\hline
+\rowcolor{grisTecnico}
+Despliegue & \texttt{Dockerfile}, \texttt{docker-compose.yml} & Imagen, orquestación y volúmenes. & 5 \\
+\hline
+Seguridad & \texttt{config/}, políticas RLS & Resource Server, RLS y excepciones PWA. & 6 \\
+\hline
+\rowcolor{grisTecnico}
+Verificación & \texttt{/actuator/health}, Swagger UI & Pruebas de humo y validación de APIs. & 7 \\
+\hline
+Diagnóstico & Logs (\texttt{backend.log}) & Tabla de errores y mitigaciones. & 8 \\
+\hline
+\rowcolor{grisTecnico}
+Reversión & Docker, \texttt{localStorage} & Desinstalación y \textit{rollback}. & 9 \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:matriz-consistencia}
+
+\par\vspace{0.4cm}
+\begin{AvisoNota}
+Los registros de instalación (\textit{logs}) del backend se generan en
+\ruta{ethoshubB/backend.log} y en la salida estándar del contenedor
+(\comando{docker compose logs -f}). Consérvelos durante toda la ventana de despliegue:
+son la primera fuente de evidencia ante cualquier incidente descrito en el
+capítulo~\ref{ch:troubleshooting}.
+\end{AvisoNota}

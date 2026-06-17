@@ -1,0 +1,395 @@
+% =============================================================================
+% CAPÍTULO 1 — INTRODUCCIÓN Y DISPOSICIONES GENERALES
+% =============================================================================
+\chapter[Introducción y Generalidades]{Introducción y Disposiciones Generales}%
+\label{ch:introduccion}
+\resumenCapitulo{Este capítulo establece el propósito, el alcance y la audiencia del
+Manual de Instalación de la plataforma EthosHub. Identifica con precisión las versiones
+de los componentes de software a desplegar, describe la naturaleza del artefacto
+monolítico integrado y fija el vocabulario controlado y la normativa que rigen el resto
+del documento. Constituye el marco de referencia que el operador debe leer antes de
+iniciar cualquier procedimiento técnico.}
+
+Este Manual de Instalación describe, paso a paso, el procedimiento completo para
+construir, configurar, desplegar y verificar la plataforma \textbf{EthosHub} en un
+entorno de servidor. Se redacta conforme al estándar \textbf{ISO/IEC/IEEE 15289:2024}
+—que define el contenido de los productos de información del ciclo de vida del software—
+y, en su tratamiento de requisitos, conforme a \textbf{IEEE 830}. A diferencia del
+Manual Técnico, que documenta el \textit{diseño} interno del sistema, este documento es
+de naturaleza \textbf{operativa}: su objetivo es que un operador con conocimientos
+medios pueda llevar el producto desde el código fuente hasta un servicio en
+funcionamiento, sin ambigüedad y de forma reproducible.\par
+
+\begin{AvisoNota}
+Lea este capítulo en su totalidad antes de ejecutar cualquier comando. Las versiones
+exactas de las herramientas (capítulo~\ref{ch:requisitos}) y la correcta provisión de
+variables de entorno (capítulo~\ref{ch:preparacion}) condicionan el éxito de todo el
+proceso. Saltarse la verificación de pre-requisitos es la causa más frecuente de fallos
+de despliegue descritos en el capítulo~\ref{ch:troubleshooting}.
+\end{AvisoNota}
+
+% -----------------------------------------------------------------------------
+\section{Propósito del Documento}%
+\label{sec:proposito}
+
+El propósito de este manual es servir como \textbf{guía autoritativa y reproducible}
+del despliegue de EthosHub en su versión \texttt{2.0.0}. En términos del estándar
+ISO/IEC/IEEE 15289:2024, constituye un \textit{procedimiento} (\textit{procedure}):
+una secuencia ordenada de pasos verificables que conducen a un resultado determinado.
+El documento persigue cuatro objetivos concretos:\par
+
+\begin{enumerate}[noitemsep]
+    \item \textbf{Reproducibilidad.} Garantizar que dos operadores distintos, partiendo
+    del mismo código fuente y siguiendo estos pasos, obtengan exactamente el mismo
+    artefacto desplegado y el mismo comportamiento del servicio.
+    \item \textbf{Trazabilidad.} Vincular cada instrucción a un artefacto real del
+    repositorio (\comando{build.sh}, \comando{pom.xml}, \comando{Dockerfile},
+    \comando{.env.production}), de modo que toda afirmación sea verificable.
+    \item \textbf{Autonomía del operador.} Permitir que el personal de infraestructura
+    complete la instalación sin necesidad de consultar al equipo de desarrollo,
+    anticipando los errores comunes y sus mitigaciones.
+    \item \textbf{Cumplimiento normativo.} Documentar el despliegue de forma auditable,
+    con control de versiones, identificación de roles y matriz de trazabilidad, según
+    exige la convocatoria CPTIS-2302-2026.
+\end{enumerate}
+
+Quedan \textbf{fuera del alcance} de este documento el diseño detallado del software
+(cubierto por el Manual Técnico), la operativa funcional para el usuario final
+(cubierta por el Manual de Usuario) y la administración continua del proyecto Supabase
+en la nube, que se asume gestionada por el equipo de base de datos. El presente manual
+abarca desde la obtención del código fuente hasta la verificación de un servicio
+operativo, incluyendo su desinstalación y reversión controlada.\par
+
+% -----------------------------------------------------------------------------
+\section{Alcance del Sistema}%
+\label{sec:alcance}
+
+\subsection{Descripción General de EthosHub (Talent Hub)}%
+\label{subsec:descripcion}
+
+\textbf{EthosHub} es una plataforma unificada de \textit{Talent Hub} que articula dos
+experiencias complementarias sobre un mismo dominio de datos. Por un lado, el
+\textbf{profesional} construye un portafolio público enriquecido —proyectos con
+documentos PDF e importación desde Google Drive, experiencia laboral, formación
+académica, habilidades y un currículum interactivo generado en el \textit{CV Studio}
+con asistencia de inteligencia artificial—. Por otro, el \textbf{reclutador} descubre,
+filtra y conecta con talento mediante un \textit{pipeline} tipo Kanban, métricas, un
+\textit{leaderboard} e \textit{insights} asistidos por IA.\par
+
+Desde la perspectiva de la instalación, lo relevante es que ambas experiencias se
+sirven desde un \textbf{único artefacto ejecutable}. El sistema no se compone de
+múltiples servicios que haya que orquestar por separado: el backend Spring Boot empaqueta
+en su interior la aplicación React ya compilada y la entrega como contenido estático.
+La tabla~\ref{tab:stack-instalacion} resume el \textit{stack} tecnológico que el operador
+encontrará durante el despliegue, organizado por capa.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|l|X|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Capa} & \textbf{Tecnología} & \textbf{Relevancia para la instalación} \\
+\hline
+Lenguaje (BE) & Java 17 & Requiere JDK 17+ instalado y en el \texttt{PATH}. \\
+\hline
+\rowcolor{grisTecnico}
+Framework (BE) & Spring Boot 4.0.6 & Provee Actuator (\texttt{/actuator/health}) y el JAR ejecutable. \\
+\hline
+Persistencia & jOOQ + Spring JDBC & Acceso SQL tipado; exige consistencia esquema/clases generadas. \\
+\hline
+\rowcolor{grisTecnico}
+Base de datos & PostgreSQL 15+ (Supabase) & Servicio externo; se aprovisiona, no se instala localmente. \\
+\hline
+Lenguaje (FE) & TypeScript 5.3 (\textit{strict}) & Se compila con \texttt{tsc} durante el \textit{build}. \\
+\hline
+\rowcolor{grisTecnico}
+Framework (FE) & React 18.3 + Vite 5.1 & Genera el directorio \texttt{dist/} que se inyecta en el JAR. \\
+\hline
+IA & Google Gemini (REST) & Servicio externo; requiere \texttt{GEMINI\_API\_KEY}. \\
+\hline
+\rowcolor{grisTecnico}
+Documentación API & springdoc-openapi 2.7 & Expone Swagger UI para la verificación del capítulo~\ref{ch:verificacion}. \\
+\hline
+Empaquetado & Maven + Docker & Generan el JAR y la imagen de contenedor. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:stack-instalacion}
+
+\par\vspace{0.3cm}
+\begin{NotaConfiguracion}
+EthosHub \textbf{no aloja su propia base de datos ni su propio servicio de
+autenticación}: ambos se delegan en \textbf{Supabase} (PostgreSQL gestionado, Auth y
+Realtime). En consecuencia, la instalación no incluye levantar un PostgreSQL local en
+producción, sino \textbf{conectar} el artefacto a un proyecto Supabase ya provisto. El
+único PostgreSQL local que aparece en este manual es el de \textbf{Testcontainers},
+empleado exclusivamente durante las pruebas automatizadas (apartado~\ref{sec:testcontainers}).
+\end{NotaConfiguracion}
+
+\subsection{Arquitectura del Artefacto Monolítico Integrado}%
+\label{subsec:arquitectura}
+
+El patrón de despliegue de EthosHub es un \textbf{monolito empaquetado}
+(\textit{packaged monolith}): la SPA de React se compila a archivos estáticos
+(\comando{dist/}) que se copian al directorio \ruta{src/main/resources/static/} del
+backend y se sirven desde el mismo JAR ejecutable que expone la API REST. El resultado
+es un \textbf{único artefacto} (\comando{ethoshub-0.0.1-SNAPSHOT.jar}) que, al
+arrancar, atiende tanto las peticiones de la interfaz como las de la API en el mismo
+origen (\textit{same-origin}). La figura~\ref{fig:monolito} ilustra esta composición.\par
+
+\vspace{0.3cm}
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[node distance=0.7cm and 1.1cm]
+    % Límite del JAR
+    \node[draw=c4BordeLim, dashed, thick, rounded corners=8pt,
+          minimum width=12.5cm, minimum height=6.2cm, label={[font=\sffamily\footnotesize\bfseries\color{c4Sistema}]above:JAR monolítico \texttt{ethoshub.jar} (puerto 8080)}] (jar) at (0,0) {};
+
+    \node[c4componente, fill=c4Componente!50] (spa) at (-3.6,1.4) {SPA React (\texttt{dist/})\\\scriptsize servida en \texttt{/}};
+    \node[c4componente] (fallback) at (-3.6,-0.1) {\texttt{SpaFallbackFilter}\\\scriptsize entrega \texttt{index.html}};
+    \node[c4componente] (sec) at (-3.6,-1.5) {Spring Security\\\scriptsize Resource Server (JWT)};
+
+    \node[c4contenedor] (ctrl) at (1.2,1.4) {Controllers REST\\\scriptsize \texttt{/api}, \texttt{/v1}, \texttt{/auth}};
+    \node[c4contenedor, fill=c4Contenedor!85] (svc) at (1.2,-0.1) {Services};
+    \node[c4contenedor, fill=c4Contenedor!70] (repo) at (1.2,-1.5) {Repositories\\\scriptsize jOOQ / \texttt{DSLContext}};
+
+    \draw[c4flecha] (ctrl) -- (svc);
+    \draw[c4flecha] (svc) -- (repo);
+    \draw[c4flecha] (sec) -- (ctrl);
+    \draw[c4flecha] (fallback) -- (spa);
+
+    % Externos
+    \node[c4datos, right=1.4cm of repo] (db) {PostgreSQL\\\scriptsize Supabase};
+    \node[c4externo, above=0.5cm of db] (gemini) {Google\\Gemini};
+    \draw[c4flecha] (repo) -- (db);
+    \draw[c4flecha] (svc.east) to[bend left=12] (gemini.west);
+\end{tikzpicture}
+\caption{Composición del artefacto monolítico: la SPA compilada y la API REST conviven en un único JAR que se conecta a servicios externos (Supabase, Gemini).}%
+\label{fig:monolito}
+\end{figure}
+
+Esta arquitectura tiene tres consecuencias prácticas de gran importancia para el
+operador, que conviene interiorizar desde el inicio:\par
+
+\begin{itemize}[noitemsep]
+    \item \textbf{Un solo proceso que desplegar.} En producción solo se ejecuta el JAR
+    (o su contenedor Docker). No hay servidor web separado para el \textit{frontend} ni
+    necesidad de configurar CORS entre dominios, pues todo es \textit{same-origin}.
+    \item \textbf{El \textit{frontend} debe compilarse \textit{antes} del empaquetado.}
+    Si el directorio \comando{dist/} no se genera correctamente, el JAR se empaqueta sin
+    interfaz. El script \comando{build.sh} (capítulo~\ref{ch:construccion}) automatiza y
+    ordena estas fases.
+    \item \textbf{En desarrollo, la topología es distinta.} Durante la ingeniería local,
+    el \textit{frontend} corre en su propio servidor Vite (puerto~3000) y reenvía las
+    llamadas de API al backend (puerto~8080) mediante un \textit{proxy}. Esta diferencia
+    se detalla en el apartado~\ref{sec:dev-mode}.
+\end{itemize}
+
+% -----------------------------------------------------------------------------
+\section{Identificación del Producto y Versión}%
+\label{sec:identificacion}
+
+Conforme a ISO/IEC/IEEE 15289:2024, todo procedimiento de instalación debe identificar
+sin ambigüedad el producto y la versión que despliega. EthosHub adopta
+\textbf{Versionado Semántico} (\textit{SemVer}, \texttt{MAYOR.MENOR.PARCHE}). La versión
+documentada en esta guía es la \texttt{2.0.0}, integrada por dos componentes de
+repositorio independientes que se ensamblan en el artefacto final.\par
+
+\subsection{Componente Backend (\texttt{ethoshubB} v2.0.0)}%
+\label{subsec:backend-id}
+
+El repositorio \comando{ethoshubB} contiene el backend Spring Boot y es el responsable
+de generar el artefacto final. Sus señas de identidad para la instalación se resumen en
+la tabla~\ref{tab:id-backend}.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{9}{10.8}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|X|}
+\hline
+\rowcolor{headerTabla}
+\multicolumn{2}{|l|}{\sffamily\textbf{Componente Backend}} \\
+\hline
+Identificador del repositorio & \texttt{ethoshubB} \\
+\hline
+\rowcolor{grisTecnico}
+Coordenadas Maven & \texttt{com.ethoshub:ethoshub:0.0.1-SNAPSHOT} \\
+\hline
+Ruta local de referencia & \ruta{/home/dpardo/Documentos/ethoshubB} \\
+\hline
+\rowcolor{grisTecnico}
+Artefacto generado & \texttt{target/ethoshub-0.0.1-SNAPSHOT.jar} \\
+\hline
+Punto de entrada & \texttt{com.ethoshub.EthosHubApplication} \\
+\hline
+\rowcolor{grisTecnico}
+Puerto por defecto & \texttt{8080} \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:id-backend}
+
+\subsection{Componente Frontend (\texttt{ethoshubF} v2.0.0)}%
+\label{subsec:frontend-id}
+
+El repositorio \comando{ethoshubF} contiene la SPA en React + TypeScript. No genera un
+artefacto desplegable por sí mismo: produce el directorio \comando{dist/} que el backend
+absorbe. Sus señas de identidad se resumen en la tabla~\ref{tab:id-frontend}.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{9}{10.8}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|X|}
+\hline
+\rowcolor{headerTabla}
+\multicolumn{2}{|l|}{\sffamily\textbf{Componente Frontend}} \\
+\hline
+Identificador del repositorio & \texttt{ethoshubF} \\
+\hline
+\rowcolor{grisTecnico}
+Nombre del paquete (npm) & \texttt{ethoshub@1.0.0} \\
+\hline
+Ruta local de referencia & \ruta{/home/dpardo/Documentos/ethoshubF} \\
+\hline
+\rowcolor{grisTecnico}
+Artefacto generado & \texttt{dist/} (estáticos) $\rightarrow$ \ruta{ethoshubB/src/main/resources/static/} \\
+\hline
+Servidor de desarrollo & Vite, puerto \texttt{3000} \\
+\hline
+\rowcolor{grisTecnico}
+Idiomas (i18next) & Español (\texttt{es}, fuente de verdad), Inglés (\texttt{en}), Portugués (\texttt{pt}) \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:id-frontend}
+
+\par\vspace{0.3cm}
+\begin{AvisoPrecaucion}
+La relación de rutas entre ambos repositorios es \textbf{rígida}: el script de
+construcción asume que \comando{ethoshubF} es un directorio hermano de \comando{ethoshubB}
+(\comando{../ethoshubF}). Si los clona en una estructura distinta, deberá ajustar la
+variable \comando{frontend.dir} del \comando{pom.xml} y la ruta \comando{FRONTEND\_DIR}
+de \comando{build.sh}, según se detalla en el apartado~\ref{sec:clonado}.
+\end{AvisoPrecaucion}
+
+% -----------------------------------------------------------------------------
+\section{Audiencia Objetivo y Niveles de Competencia Técnica}%
+\label{sec:audiencia}
+
+Este manual está orientado, principalmente, a la \textbf{persona que realiza la
+instalación}: un operador de infraestructura, un evaluador técnico de la convocatoria o
+un desarrollador que prepara un entorno de pruebas. No se asume experiencia previa con
+EthosHub, pero sí un nivel básico de competencia en línea de comandos. La
+tabla~\ref{tab:audiencia} detalla los perfiles, el nivel mínimo esperado y las secciones
+prioritarias para cada uno.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.4}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|X|c|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Perfil} & \textbf{Competencias mínimas asumidas} & \textbf{Caps.} \\
+\hline
+Operador de despliegue & Terminal Linux, Docker básico, edición de archivos \texttt{.env}. & 2--5, 9 \\
+\hline
+\rowcolor{grisTecnico}
+Evaluador técnico (TIS) & Lectura de logs, navegador web, conceptos de cliente/servidor. & 1, 5, 7 \\
+\hline
+Administrador de BD & Supabase, PostgreSQL, SQL, políticas RLS. & 3, 6 \\
+\hline
+\rowcolor{grisTecnico}
+Usuario evaluador (PWA) & Uso de navegador, ajustes de privacidad, cámara/micrófono. & 6.3 \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:audiencia}
+
+\par\vspace{0.3cm}
+Para mantener el documento accesible, cada procedimiento se presenta como una
+\textbf{secuencia numerada de pasos}, acompañada de los comandos literales que deben
+ejecutarse y del resultado esperado. Los conceptos que exceden el nivel del operador
+(por ejemplo, el funcionamiento interno de las políticas RLS) se delimitan en cajas de
+\textit{Nota de Configuración} y pueden delegarse al administrador de base de datos.\par
+
+% -----------------------------------------------------------------------------
+\section{Glosario de Términos y Acrónimos}%
+\label{sec:glosario}
+
+El glosario de la tabla~\ref{tab:glosario} fija el vocabulario controlado que se emplea
+de forma recurrente en los procedimientos. Se recomienda al operador familiarizarse con
+estos términos antes de continuar, pues se utilizan sin redefinición en los capítulos
+siguientes.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.4}
+\fontsize{9}{10.8}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|X|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Término} & \textbf{Definición operativa} \\
+\hline
+PWA & \textit{Progressive Web App}. Aplicación web que ofrece capacidades cercanas a las nativas (instalación, acceso a cámara/micrófono). En EthosHub habilita la captura de vídeo/audio del \textit{CV Studio}; exige origen seguro (HTTPS o \texttt{localhost}), restricción central del capítulo~\ref{ch:seguridad}. \\
+\hline
+\rowcolor{grisTecnico}
+SPA & \textit{Single Page Application}. Cliente React que carga una sola página y reescribe su contenido por JavaScript. Es lo que se compila a \texttt{dist/} y se sirve desde el JAR. \\
+\hline
+JWT & \textit{JSON Web Token}. Credencial firmada que Supabase emite tras la autenticación y que el backend valida en cada petición protegida. \\
+\hline
+\rowcolor{grisTecnico}
+JWKS & \textit{JSON Web Key Set}. Conjunto de claves públicas publicado por Supabase (\texttt{/auth/v1/.well-known/jwks.json}) con el que el backend verifica la firma de los JWT. \\
+\hline
+RLS & \textit{Row Level Security}. Mecanismo de PostgreSQL que restringe el acceso a filas según el usuario. Se configura en Supabase (apartado~\ref{sec:rls}). \\
+\hline
+\rowcolor{grisTecnico}
+jOOQ & Biblioteca de acceso a datos que genera clases Java tipadas a partir del esquema SQL. Una desalineación esquema/clases produce el error del apartado~\ref{sec:error-jooq}. \\
+\hline
+Monolito empaquetado & Patrón de despliegue en el que la SPA y la API se sirven desde un único JAR. Ver figura~\ref{fig:monolito}. \\
+\hline
+\rowcolor{grisTecnico}
+Resource Server & Componente OAuth2 que protege recursos validando JWT sin emitirlos. Rol del backend de EthosHub. \\
+\hline
+Artefacto & Producto de la construcción listo para desplegar: en este manual, el JAR ejecutable o la imagen Docker. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:glosario}
+
+% -----------------------------------------------------------------------------
+\section{Documentos de Referencia y Normativa Aplicable}%
+\label{sec:referencias}
+
+La elaboración de esta guía se rige por los estándares y documentos de la
+tabla~\ref{tab:referencias}. El operador no necesita haberlos leído para completar la
+instalación, pero su cumplimiento explica la estructura y el nivel de detalle del
+documento.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|X|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Documento} & \textbf{Aplicación en este manual} \\
+\hline
+ISO/IEC/IEEE 15289:2024 & Define el contenido del procedimiento de instalación: identificación, control de versiones, roles y trazabilidad. \\
+\hline
+\rowcolor{grisTecnico}
+IEEE 830-1998 & Marco para la expresión de requisitos (capítulo~\ref{ch:requisitos}): hardware, software y red. \\
+\hline
+Manual Técnico de EthosHub (\texttt{MT-ARQ-ETHOSHUB-2.0.0}) & Documento hermano que describe el diseño interno; se referencia para detalles arquitectónicos. \\
+\hline
+\rowcolor{grisTecnico}
+\texttt{README} de \texttt{ethoshubB} y \texttt{ethoshubF} & Fuente primaria de los comandos y variables reproducidos en los capítulos~\ref{ch:construccion} y~\ref{ch:preparacion}. \\
+\hline
+Convocatoria CPTIS-2302-2026 & Marco contractual del proyecto y origen de los requisitos de documentación. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:referencias}
+
+\par\vspace{0.3cm}
+Con el marco de referencia establecido, el capítulo~\ref{ch:requisitos} detalla los
+requisitos previos de hardware, software y red que deben satisfacerse antes de obtener el
+código fuente.\par

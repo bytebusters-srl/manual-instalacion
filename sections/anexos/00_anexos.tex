@@ -1,0 +1,720 @@
+% =============================================================================
+% ANEXOS — MATERIAL DE REFERENCIA
+% =============================================================================
+\chapter[Anexos y Material de Referencia]{Anexos y Material de Referencia}%
+\label{ch:anexos}
+\resumenCapitulo{Este capítulo reúne el material de referencia de consulta rápida que
+complementa los procedimientos del manual: una hoja de comandos por fase, el catálogo
+completo de \textit{endpoints} REST, las plantillas íntegras de los archivos de
+configuración, la matriz extendida de variables, una sección de preguntas frecuentes y las
+listas de verificación imprimibles por fase de instalación.}
+
+Los anexos no introducen pasos nuevos: condensan, en formato de referencia, la información
+dispersa en los capítulos anteriores para que el operador la tenga a mano durante el
+despliegue. Cada anexo remite, mediante referencias cruzadas, al capítulo donde el
+procedimiento correspondiente se explica en detalle.\par
+
+% -----------------------------------------------------------------------------
+\section{Anexo A — Hoja de Referencia Rápida de Comandos}%
+\label{sec:anexo-comandos}
+
+La tabla~\ref{tab:cheatsheet} consolida los comandos esenciales de cada fase del ciclo de
+instalación, en el orden en que se ejecutan.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.3}
+\fontsize{8.3}{10}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|>{\ttfamily\raggedright\arraybackslash}X|}
+\hline
+\rowcolor{headerTabla}
+\sffamily\textbf{Fase} & \sffamily\textbf{Comando} \\
+\hline
+Verificar JDK & java -version \\
+\hline
+\rowcolor{grisTecnico}
+Verificar Node & node -v \&\& npm -v \\
+\hline
+Verificar Docker & docker compose version \\
+\hline
+\rowcolor{grisTecnico}
+Clonar código & git clone <url>/ethoshubB.git \&\& git clone <url>/ethoshubF.git \\
+\hline
+Configurar backend & cp .env.example .env \\
+\hline
+\rowcolor{grisTecnico}
+Migrar BD & psql "\$PGURL" -f src/main/resources/db/migration/V1\_\_*.sql \\
+\hline
+Construir (completo) & ./build.sh -{}-prod \\
+\hline
+\rowcolor{grisTecnico}
+Construir (solo BE) & ./build.sh -{}-skip-fe \\
+\hline
+Ejecutar JAR & java -jar target/ethoshub-0.0.1-SNAPSHOT.jar -{}-spring.profiles.active=prod \\
+\hline
+\rowcolor{grisTecnico}
+Construir imagen & docker build -t ethoshub:2.0.0 . \\
+\hline
+Levantar Compose & docker compose up -d -{}-build \\
+\hline
+\rowcolor{grisTecnico}
+Ver logs & docker compose logs -f ethoshub-backend \\
+\hline
+Salud & curl -s http://localhost:8080/actuator/health \\
+\hline
+\rowcolor{grisTecnico}
+Detener & docker compose stop \\
+\hline
+Purga total & docker compose down -v \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:cheatsheet}
+
+% -----------------------------------------------------------------------------
+\section{Anexo B — Catálogo Completo de Endpoints REST}%
+\label{sec:anexo-endpoints}
+
+La tabla~\ref{tab:endpoints-full} cataloga los controladores REST expuestos por el backend,
+agrupados por dominio funcional. El operador puede inspeccionarlos en Swagger UI
+(apartado~\ref{subsec:swagger}) para confirmar que la API se desplegó por completo.\par
+
+\vspace{0.2cm}
+\renewcommand{\arraystretch}{1.3}
+\fontsize{8.2}{9.8}\selectfont\sffamily
+\setlength{\tabcolsep}{4pt}
+\begin{longtable}{|>{\bfseries\color{colorPrimario}\raggedright\arraybackslash}p{2.5cm}|>{\ttfamily\raggedright\arraybackslash}p{5.2cm}|>{\raggedright\arraybackslash}p{7.2cm}|}
+\caption{Catálogo de controladores REST del backend, por dominio funcional.}\label{tab:endpoints-full}\\
+\hline
+\rowcolor{headerTabla}
+\sffamily\textbf{Dominio} & \sffamily\textbf{Controlador} & \sffamily\textbf{Responsabilidad} \\
+\hline
+\endfirsthead
+\hline
+\rowcolor{headerTabla}
+\sffamily\textbf{Dominio} & \sffamily\textbf{Controlador} & \sffamily\textbf{Responsabilidad} \\
+\hline
+\endhead
+\hline
+\multicolumn{3}{r}{\sffamily\tiny\color{grisISO}\textit{continúa en la página siguiente}}\\
+\endfoot
+\hline
+\endlastfoot
+Auth & AuthController & Registro, login y sincronización OAuth. \\
+\hline
+\rowcolor{grisTecnico}
+Auth & ForgotPasswordController & Recuperación de contraseña por correo. \\
+\hline
+Seguridad & SecurityController & Cambio de contraseña/email y baja de cuenta con OTP. \\
+\hline
+\rowcolor{grisTecnico}
+Perfil & ProfileController & Perfil profesional básico del usuario. \\
+\hline
+Proyectos & ProjectController & CRUD de proyectos, subida multi-PDF, Google Drive. \\
+\hline
+\rowcolor{grisTecnico}
+Experiencia & WorkExperienceController & Experiencia laboral con campos geográficos. \\
+\hline
+Formación & AcademicRecordController & Registros académicos y formación. \\
+\hline
+\rowcolor{grisTecnico}
+Skills & SkillController & Hard y soft skills (con \textit{soft-delete}). \\
+\hline
+Portafolio & PortfolioSettingsController & Ajustes de visibilidad, SEO y contraseña. \\
+\hline
+\rowcolor{grisTecnico}
+Portafolio & PortfolioPublicController & Vista pública del portafolio. \\
+\hline
+CV Studio & CvDocumentController & Edición de CV, IA y compilación a PDF. \\
+\hline
+\rowcolor{grisTecnico}
+CV Studio & FileUploadController & Subida de archivos del CV. \\
+\hline
+Conexiones & ConnectionController & Conexiones a apps externas (URL-first). \\
+\hline
+\rowcolor{grisTecnico}
+Chat & ChatController & Mensajería en tiempo real (Supabase Realtime). \\
+\hline
+Notificaciones & NotificationController & Notificaciones del usuario. \\
+\hline
+\rowcolor{grisTecnico}
+Preferencias & PreferenceController & Preferencias e idioma del usuario. \\
+\hline
+Reclutador & TalentController & Descubrimiento de talento y \textit{pipeline} Kanban. \\
+\hline
+\rowcolor{grisTecnico}
+Reclutador & RecruiterProfileController & Perfil del reclutador. \\
+\hline
+Reclutador & RecruiterAiController & \textit{Insights} de IA y búsqueda NLP. \\
+\hline
+\rowcolor{grisTecnico}
+Admin & AdminMetricsController & Métricas del panel de administración. \\
+\hline
+Admin & AdminModerationController & Moderación de contenido. \\
+\hline
+\rowcolor{grisTecnico}
+Admin & AdminProfileController & Gestión de perfiles. \\
+\hline
+Admin & AdminSkillController & Gestión del catálogo de skills. \\
+\hline
+\rowcolor{grisTecnico}
+Admin & AdminEmailController & Envío de correos masivos. \\
+\hline
+Infra & HealthController & Sonda de salud del servicio. \\
+\hline
+\end{longtable}
+
+% -----------------------------------------------------------------------------
+\section{Anexo C — Plantillas Completas de Archivos de Configuración}%
+\label{sec:anexo-plantillas}
+
+Este anexo reproduce, íntegras, las plantillas de los archivos de configuración que el
+operador debe rellenar. Sustituya los valores entre \comando{<...>} por los reales.\par
+
+\subsection{C.1 — \texttt{ethoshubB/.env} (backend)}%
+\label{subsec:plantilla-env-be}
+
+\begin{lstlisting}[language=bash]
+# === Servidor ===============================================
+SERVER_PORT=8080
+SPRING_PROFILES_ACTIVE=prod
+
+# === Supabase ===============================================
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_ANON_KEY=<anon-key>
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>   # SECRETO
+
+# === Validacion de JWT (defina UNO) =========================
+# HS256 (secreto compartido):
+SUPABASE_JWT_SECRET=
+# RS256 (JWKS, recomendado):
+SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=https://<ref>.supabase.co/auth/v1/.well-known/jwks.json
+
+# === IA (Google Gemini) =====================================
+GEMINI_API_KEY=<gemini-key>
+\end{lstlisting}
+
+\subsection{C.2 — \texttt{ethoshubF/.env.production} (frontend)}%
+\label{subsec:plantilla-env-fe}
+
+\begin{lstlisting}[language=bash]
+# Same-origin en el monolito: VITE_API_URL vacia -> baseURL '/api'
+VITE_API_URL=
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon-key>
+
+# Google Drive Picker (credenciales publicas de cliente)
+VITE_GOOGLE_API_KEY=<google-api-key>
+VITE_GOOGLE_CLIENT_ID=<google-client-id>.apps.googleusercontent.com
+\end{lstlisting}
+
+\subsection{C.3 — \texttt{docker-compose.yml}}%
+\label{subsec:plantilla-compose}
+
+\begin{lstlisting}[language=bash]
+services:
+  ethoshub-backend:
+    build:
+      context: .
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - SUPABASE_DB_URL=jdbc:postgresql://<host>:5432/postgres
+      - SUPABASE_DB_USER=postgres
+      - SUPABASE_DB_PASSWORD=<password>
+      - SUPABASE_JWKS_URI=https://<ref>.supabase.co/auth/v1/.well-known/jwks.json
+    volumes:
+      - .:/app
+      - spring-cache:/root/.m2
+    networks:
+      - ethoshub-net
+volumes:
+  spring-cache:
+networks:
+  ethoshub-net:
+    driver: bridge
+\end{lstlisting}
+
+\begin{NotaConfiguracion}
+Para no exponer secretos en \comando{docker-compose.yml}, sustituya el bloque
+\comando{environment} por la directiva \comando{env\_file: .env} y mantenga el archivo
+\comando{.env} fuera del control de versiones, según el principio de custodia del
+apartado~\ref{subsec:servicerole}.
+\end{NotaConfiguracion}
+
+% -----------------------------------------------------------------------------
+\section{Anexo D — Matriz Extendida de Variables de Entorno}%
+\label{sec:anexo-vars}
+
+La tabla~\ref{tab:vars-ext} amplía la matriz del apartado~\ref{subsec:matriz-variables}
+con el valor por defecto y el componente de cada variable.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.3}
+\fontsize{8.2}{9.8}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\ttfamily\bfseries\color{colorPrimario}\raggedright\arraybackslash}p{4.6cm}|c|>{\raggedright\arraybackslash}X|}
+\hline
+\rowcolor{headerTabla}
+\sffamily\textbf{Variable} & \sffamily\textbf{Comp.} & \sffamily\textbf{Valor por defecto / nota} \\
+\hline
+SERVER\_PORT & BE & 8080 \\
+\hline
+\rowcolor{grisTecnico}
+SPRING\_PROFILES\_ACTIVE & BE & local (usar prod en despliegue) \\
+\hline
+SUPABASE\_URL & BE & — (obligatoria) \\
+\hline
+\rowcolor{grisTecnico}
+SUPABASE\_ANON\_KEY & BE & — (obligatoria) \\
+\hline
+SUPABASE\_SERVICE\_ROLE\_KEY & BE & — (secreta, obligatoria) \\
+\hline
+\rowcolor{grisTecnico}
+...JWT\_JWK\_SET\_URI & BE & JWKS de Supabase \\
+\hline
+GEMINI\_API\_KEY & BE & — (IA; sin ella, IA devuelve error) \\
+\hline
+\rowcolor{grisTecnico}
+APP\_BASE\_URL & BE & http://localhost:8080 \\
+\hline
+APP\_FRONTEND\_URL & BE & http://localhost:5173 \\
+\hline
+\rowcolor{grisTecnico}
+VITE\_API\_URL & FE & vacía (same-origin /api) \\
+\hline
+VITE\_SUPABASE\_URL & FE & — (obligatoria) \\
+\hline
+\rowcolor{grisTecnico}
+VITE\_SUPABASE\_ANON\_KEY & FE & — (obligatoria) \\
+\hline
+VITE\_GOOGLE\_CLIENT\_ID & FE & — (Drive Picker, opcional) \\
+\hline
+\rowcolor{grisTecnico}
+VITE\_GOOGLE\_API\_KEY & FE & — (Drive Picker, opcional) \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:vars-ext}
+
+% -----------------------------------------------------------------------------
+\section{Anexo E — Preguntas Frecuentes de Instalación (FAQ)}%
+\label{sec:anexo-faq}
+
+\textbf{¿Debo instalar PostgreSQL en el servidor?}\par
+No. En producción la base de datos la provee Supabase. PostgreSQL solo aparece localmente a
+través de Testcontainers durante las pruebas (apartado~\ref{sec:testcontainers}).\par
+
+\textbf{¿Puedo desplegar sin Docker?}\par
+Sí. Ejecute directamente \comando{java -jar} \ruta{target/ethoshub-0.0.1-SNAPSHOT.jar}
+\ruta{-{}-spring.profiles.active=prod}. Docker es la vía recomendada por su reproducibilidad, no
+una exigencia (apartado~\ref{sec:prod}).\par
+
+\textbf{¿Por qué la cámara no funciona en la red local?}\par
+Porque el origen es HTTP inseguro. Aplique las excepciones de navegador del
+apartado~\ref{sec:pwa-http} o sirva la aplicación bajo HTTPS.\par
+
+\textbf{¿El sistema arranca sin la clave de Gemini?}\par
+Sí. Solo se deshabilitan los \textit{endpoints} de IA; el resto opera con normalidad
+(apartado~\ref{sec:degradacion-ia}).\par
+
+\textbf{¿Dónde van los archivos compilados?}\par
+El \textit{frontend} compila a \comando{dist/}, que se copia a \comando{static/} dentro del
+JAR. Los artefactos de LaTeX de \emph{este} manual se generan en \comando{build/}.\par
+
+\textbf{¿Tengo que definir \texttt{VITE\_API\_URL}?}\par
+No en el monolito ni en desarrollo (el proxy de Vite la cubre). Se deja vacía para que
+Axios use la ruta relativa \comando{/api}.\par
+
+\textbf{¿Qué hago si el puerto 8080 está ocupado?}\par
+Identifique el proceso con \comando{ss -ltnp | grep 8080} y deténgalo, o cambie
+\comando{SERVER\_PORT} (capítulo~\ref{ch:troubleshooting}).\par
+
+% -----------------------------------------------------------------------------
+\section{Anexo F — Listas de Verificación Imprimibles por Fase}%
+\label{sec:anexo-checklists}
+
+\textbf{F.1 — Pre-requisitos (capítulo~\ref{ch:requisitos})}\par
+\begin{checklist}
+    \item JDK 17+ instalado y en el \texttt{PATH}.
+    \item Node.js 20+ y npm 10+ disponibles.
+    \item Docker Engine 24+ y Compose v2 activos.
+    \item Credenciales de Supabase obtenidas (URL, anon, service-role, JWKS).
+    \item Clave de Gemini obtenida (si se requieren funciones de IA).
+    \item Puerto 8080 libre.
+\end{checklist}
+
+\textbf{F.2 — Preparación (capítulo~\ref{ch:preparacion})}\par
+\begin{checklist}
+    \item \texttt{ethoshubB} y \texttt{ethoshubF} clonados como hermanos.
+    \item \texttt{.env} del backend rellenado.
+    \item \texttt{.env.production} del frontend rellenado.
+    \item Migraciones aplicadas en orden sobre Supabase.
+\end{checklist}
+
+\textbf{F.3 — Construcción y despliegue (capítulos~\ref{ch:construccion} y~\ref{ch:despliegue})}\par
+\begin{checklist}
+    \item \texttt{build.sh} finalizó con éxito y generó el JAR.
+    \item \texttt{static/} contiene \texttt{index.html} y \texttt{assets/}.
+    \item Imagen Docker construida (si aplica).
+    \item Contenedor en estado \texttt{Up} o JAR en ejecución.
+\end{checklist}
+
+\textbf{F.4 — Verificación y cierre (capítulos~\ref{ch:verificacion} y~\ref{ch:desinstalacion})}\par
+\begin{checklist}
+    \item \texttt{/actuator/health} responde \texttt{UP}.
+    \item Swagger UI carga los controladores.
+    \item 401/403 se devuelven correctamente.
+    \item Excepciones de navegador aplicadas (si HTTP) y previstas para reversión.
+    \item Procedimiento de purga y limpieza de cliente conocido.
+\end{checklist}
+
+% -----------------------------------------------------------------------------
+\section{Anexo G — Endurecimiento del Despliegue de Producción}%
+\label{sec:anexo-hardening}
+
+El despliegue básico de los capítulos~\ref{ch:despliegue} y~\ref{ch:seguridad} sirve la
+aplicación en HTTP por el puerto 8080. Para un entorno de producción real conviene
+\textbf{endurecerlo} con tres medidas estándar: terminación TLS mediante proxy inverso,
+ejecución como servicio del sistema y restricción del cortafuegos. Este anexo es opcional
+pero recomendado.\par
+
+\subsection{G.1 — Proxy Inverso con TLS (Nginx + Certbot)}%
+\label{subsec:nginx}
+
+Un proxy inverso Nginx termina TLS y reenvía el tráfico cifrado al monolito en 8080. Esto
+sirve la PWA bajo \comando{https://}, lo que \textbf{elimina la necesidad} de las
+excepciones de navegador del apartado~\ref{sec:pwa-http}.\par
+
+\begin{lstlisting}[language=bash]
+# /etc/nginx/sites-available/ethoshub
+server {
+    listen 80;
+    server_name bytebusters.tis.cs.umss.edu.bo;
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash]
+# Habilitar el sitio y emitir el certificado TLS gratuito (Let's Encrypt)
+$ sudo ln -s /etc/nginx/sites-available/ethoshub /etc/nginx/sites-enabled/
+$ sudo nginx -t && sudo systemctl reload nginx
+$ sudo certbot --nginx -d bytebusters.tis.cs.umss.edu.bo
+\end{lstlisting}
+
+\begin{VerificacionOK}
+Tras emitir el certificado, la aplicación responde en \comando{https://} con un candado
+válido. La cámara y el micrófono de la PWA funcionan \textbf{sin} banderas de navegador,
+pues el origen ya es seguro. Esta es la solución definitiva recomendada frente a las
+excepciones temporales del apartado~\ref{sec:pwa-http}.
+\end{VerificacionOK}
+
+\subsection{G.2 — Ejecución como Servicio del Sistema (systemd)}%
+\label{subsec:systemd}
+
+Para que el JAR arranque al iniciar el servidor y se reinicie ante fallos, defínalo como
+una unidad de \comando{systemd}:\par
+
+\begin{lstlisting}[language=bash]
+# /etc/systemd/system/ethoshub.service
+[Unit]
+Description=EthosHub Monolito
+After=network.target
+
+[Service]
+User=ethoshub
+WorkingDirectory=/opt/ethoshub
+EnvironmentFile=/opt/ethoshub/.env
+ExecStart=/usr/bin/java -jar /opt/ethoshub/ethoshub.jar --spring.profiles.active=prod
+SuccessExitStatus=143
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash]
+$ sudo systemctl daemon-reload
+$ sudo systemctl enable --now ethoshub
+$ sudo systemctl status ethoshub      # debe figurar "active (running)"
+$ journalctl -u ethoshub -f           # logs en vivo
+\end{lstlisting}
+
+\subsection{G.3 — Restricción del Cortafuegos (ufw)}%
+\label{subsec:firewall}
+
+Exponga únicamente los puertos necesarios. Con el proxy Nginx, el puerto 8080 \textbf{no}
+debe ser accesible desde el exterior; solo 80/443.\par
+
+\begin{lstlisting}[language=bash]
+$ sudo ufw allow 22/tcp        # SSH
+$ sudo ufw allow 80,443/tcp    # HTTP/HTTPS (Nginx)
+$ sudo ufw deny 8080/tcp       # bloquea acceso externo directo al JAR
+$ sudo ufw enable
+$ sudo ufw status numbered
+\end{lstlisting}
+
+\begin{AlertaSeguridad}
+Verifique que el puerto 8080 \textbf{no} responde desde una máquina externa
+(\comando{curl http://<ip-publica>:8080} debe agotar el tiempo). El único punto de entrada
+público debe ser el proxy TLS. Dejar 8080 abierto anula la terminación TLS y reexpone la
+PWA en HTTP inseguro.
+\end{AlertaSeguridad}
+
+% -----------------------------------------------------------------------------
+\section{Anexo H — Topología de Despliegue de Producción y Glosario Extendido}%
+\label{sec:anexo-topologia}
+
+La figura~\ref{fig:topologia-prod} integra los componentes de un despliegue endurecido: el
+navegador accede por HTTPS al proxy Nginx, que reenvía al monolito; este se conecta a los
+servicios externos.\par
+
+\vspace{0.3cm}
+\begin{figure}[h!]
+\centering
+\begin{tikzpicture}[node distance=0.8cm and 1.5cm, every node/.style={font=\sffamily\scriptsize}]
+    \node[c4persona, minimum width=2.0cm, minimum height=0.9cm] (nav) {Navegador\\\scriptsize PWA};
+    \node[c4contenedor, right=of nav, minimum width=2.0cm, minimum height=0.9cm] (nginx) {Nginx\\\scriptsize TLS :443};
+    \node[c4sistema, right=of nginx, minimum width=2.2cm, minimum height=0.9cm] (jar) {Monolito\\\scriptsize :8080};
+    \node[c4datos, above right=0.6cm and 1.2cm of jar] (sb) {Supabase};
+    \node[c4externo, right=1.2cm of jar] (gem) {Gemini};
+    \node[c4externo, below right=0.6cm and 1.2cm of jar] (drv) {Drive};
+    \draw[c4flecha] (nav) -- node[c4etiqueta, above]{HTTPS} (nginx);
+    \draw[c4flecha] (nginx) -- node[c4etiqueta, above]{:8080} (jar);
+    \draw[c4flecha] (jar) -- (sb);
+    \draw[c4flecha] (jar) -- (gem);
+    \draw[c4flecha] (jar) -- (drv);
+\end{tikzpicture}
+\caption{Topología de un despliegue de producción endurecido: TLS en el borde (Nginx) y monolito interno conectado a los servicios gestionados.}%
+\label{fig:topologia-prod}
+\end{figure}
+
+\par\vspace{0.2cm}
+La tabla~\ref{tab:glosario-ext} amplía el glosario del apartado~\ref{sec:glosario} con
+términos de infraestructura empleados en los anexos.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.35}
+\fontsize{8.7}{10.4}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|X|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Término} & \textbf{Definición} \\
+\hline
+Proxy inverso & Servidor (p.\,ej. Nginx) que recibe peticiones del exterior y las reenvía a un servicio interno, terminando TLS. \\
+\hline
+\rowcolor{grisTecnico}
+Terminación TLS & Punto donde el tráfico cifrado HTTPS se descifra antes de reenviarse en claro a la red interna. \\
+\hline
+systemd & Sistema de inicio de Linux que gestiona servicios; permite arranque automático y reinicio ante fallos. \\
+\hline
+\rowcolor{grisTecnico}
+\textit{Pooler} & Agrupador de conexiones de Supabase que multiplexa conexiones a PostgreSQL (puerto 5432). \\
+\hline
+Same-origin & Política por la que cliente y API comparten esquema, host y puerto; el monolito la cumple por diseño. \\
+\hline
+\rowcolor{grisTecnico}
+Smoke test & Prueba mínima que confirma que el servicio responde, sin validar toda su funcionalidad. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:glosario-ext}
+
+% -----------------------------------------------------------------------------
+\section{Anexo I — Referencia Anotada de \texttt{application.yml}}%
+\label{sec:anexo-appyml}
+
+El backend lee su configuración de \comando{application.yml} (perfil base) y
+\comando{application-prod.yml} (producción). El listado siguiente anota las claves más
+relevantes y su variable de entorno asociada. Los valores entre \comando{\$\{...\}} se
+resuelven desde el entorno; el texto tras los dos puntos es el valor por defecto.\par
+
+\begin{lstlisting}[language=bash]
+server:
+  port: ${SERVER_PORT:8080}            # Puerto HTTP del monolito
+
+spring:
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  datasource:
+    url: ${DATABASE_URL}               # JDBC del pooler de Supabase
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: ${SUPABASE_JWK_SET_URI}   # Valida firmas JWT
+  jackson:
+    default-property-inclusion: non_null         # Omite nulos en las respuestas
+    time-zone: UTC                                # Fechas en UTC
+
+supabase:
+  url: ${SUPABASE_URL}
+  anon-key: ${SUPABASE_ANON_KEY}
+  service-role-key: ${SUPABASE_SERVICE_ROLE_KEY}  # SECRETO
+
+gemini:
+  api-key: ${GEMINI_API_KEY}            # IA: CV Studio y Recruiter Insights
+
+server.tomcat:
+  max-http-form-post-size: -1           # Sin limite (correo masivo de admin)
+  max-swallow-size: -1
+\end{lstlisting}
+
+\begin{NotaConfiguracion}
+La configuración \comando{max-http-form-post-size: -1} y \comando{max-swallow-size: -1} de
+Tomcat elimina el límite del tamaño de formulario, necesario para el envío de correo masivo
+desde el panel de administración. No la modifique salvo que su política de seguridad exija
+acotar el tamaño de las peticiones.
+\end{NotaConfiguracion}
+
+% -----------------------------------------------------------------------------
+\section{Anexo J — Ajuste de Rendimiento de la JVM y Observabilidad}%
+\label{sec:anexo-jvm}
+
+Para entornos de producción con memoria acotada, conviene fijar los parámetros de la JVM en
+lugar de depender de los valores automáticos. La tabla~\ref{tab:jvm} resume las opciones
+habituales.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.3}
+\fontsize{8.5}{10.2}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\ttfamily\bfseries\color{colorPrimario}\raggedright\arraybackslash}p{5.0cm}|X|}
+\hline
+\rowcolor{headerTabla}
+\sffamily\textbf{Opción JVM} & \sffamily\textbf{Efecto} \\
+\hline
+-Xmx512m & Límite de memoria del \textit{heap} (ajuste según RAM disponible). \\
+\hline
+\rowcolor{grisTecnico}
+-XX:+UseContainerSupport & Respeta los límites de memoria del contenedor. \\
+\hline
+\seqsplit{-Djava.net.preferIPv4Stack=true} & Fuerza IPv4 (ya fijado por el \textit{plugin} de Spring Boot). \\
+\hline
+\rowcolor{grisTecnico}
+-Dspring.profiles.active=prod & Activa el perfil de producción. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:jvm}
+
+\par\vspace{0.2cm}
+\begin{lstlisting}[language=bash]
+# Ejecucion con parametros de JVM ajustados
+$ java -Xmx512m -XX:+UseContainerSupport \
+    -jar target/ethoshub-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
+\end{lstlisting}
+
+En cuanto a observabilidad, Spring Boot Actuator expone, además de \comando{/health},
+\textit{endpoints} de información y métricas que pueden integrarse con un sistema de
+monitorización. La tabla~\ref{tab:obs} los resume.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.3}
+\fontsize{8.5}{10.2}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\ttfamily\color{colorPrimario}}l|X|}
+\hline
+\rowcolor{headerTabla}
+\sffamily\textbf{Endpoint} & \sffamily\textbf{Información} \\
+\hline
+/actuator/health & Estado de salud (UP/DOWN) del servicio y sus dependencias. \\
+\hline
+\rowcolor{grisTecnico}
+/actuator/info & Metadatos de la aplicación. \\
+\hline
+/v3/api-docs & Especificación OpenAPI de la API. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:obs}
+
+% -----------------------------------------------------------------------------
+\section{Anexo K — Matriz de Compatibilidad de Versiones}%
+\label{sec:anexo-compat}
+
+La tabla~\ref{tab:compat} fija las versiones probadas de cada componente. Desviarse de ellas
+puede funcionar, pero queda fuera de la configuración validada.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.3}
+\fontsize{8.5}{10.2}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|>{\bfseries\color{colorPrimario}}l|l|X|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Componente} & \textbf{Versión validada} & \textbf{Notas} \\
+\hline
+Java (JDK) & 17 & Mínimo obligatorio; el \textit{build} aborta con versiones menores. \\
+\hline
+\rowcolor{grisTecnico}
+Spring Boot & 4.0.6 & Heredado por \texttt{spring-boot-starter-parent}. \\
+\hline
+Node.js & 20 LTS & Compatible con la línea 25. \\
+\hline
+\rowcolor{grisTecnico}
+React & 18.3 & SPA principal. \\
+\hline
+TypeScript & 5.3 & Modo \texttt{strict}. \\
+\hline
+\rowcolor{grisTecnico}
+Vite & 5.1 & \textit{Bundler} y servidor de desarrollo. \\
+\hline
+PostgreSQL & 15 & Gestionado por Supabase. \\
+\hline
+\rowcolor{grisTecnico}
+springdoc-openapi & 2.7.0 & Swagger UI / OpenAPI. \\
+\hline
+Tectonic & 0.15.0 & Motor LaTeX del CV Studio (en la imagen Docker). \\
+\hline
+\rowcolor{grisTecnico}
+Docker Engine & 24+ & Con Compose v2. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:compat}
+
+% -----------------------------------------------------------------------------
+\section{Anexo L — Mapa de Logs y Códigos de Estado}%
+\label{sec:anexo-logs}
+
+La tabla~\ref{tab:codigos} relaciona los códigos HTTP que el operador encontrará durante la
+verificación con su interpretación y la acción sugerida.\par
+
+\vspace{0.2cm}
+\noindent
+\renewcommand{\arraystretch}{1.3}
+\fontsize{8.5}{10.2}\selectfont\sffamily
+\begin{tabularx}{\dimexpr\textwidth-2pt\relax}{|c|>{\raggedright\arraybackslash}p{4.4cm}|X|}
+\hline
+\rowcolor{headerTabla}
+\textbf{Código} & \textbf{Significado} & \textbf{Acción sugerida} \\
+\hline
+200 & Operación correcta. & Ninguna. \\
+\hline
+\rowcolor{grisTecnico}
+401 & No autenticado (sin JWT o inválido). & Revisar token / JWKS (\ref{subsec:jwt}). \\
+\hline
+403 & Autenticado sin permisos. & Revisar rol del usuario. \\
+\hline
+\rowcolor{grisTecnico}
+429 & Cuota de IA agotada (Gemini). & Reintentar más tarde (\ref{sec:degradacion-ia}). \\
+\hline
+502 & Error de pasarela hacia la IA. & Revisar conectividad a Gemini. \\
+\hline
+\rowcolor{grisTecnico}
+503 & Servicio no disponible (BD o IA caída). & Revisar Supabase / egreso de red. \\
+\hline
+\end{tabularx}\normalfont\normalsize%
+\label{tab:codigos}
+
+\par\vspace{0.3cm}
+Para soporte durante el despliegue, contacte al equipo de Byte Busters S.R.L. en
+\ruta{contacto@bytebusters.com}. Este manual, identificado como
+\ruta{MI-INST-ETHOSHUB-2.0.0}, constituye la referencia autoritativa del procedimiento
+de instalación de la plataforma EthosHub.\par

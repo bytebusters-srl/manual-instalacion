@@ -26,6 +26,24 @@
       ]
     }
   ],
+  // Argumentos del linter ChkTeX (panel "Problems").
+  // Conserva los valores por defecto (-n22 -n30 -e16) y silencia avisos
+  // opinables o que aquí son falsos positivos sobre código literal:
+  //  -n1  Command terminated with space (inocuo en defs. de macros/entornos)
+  //  -n6  No italic correction (falso positivo)
+  //  -n8  Wrong length of dash (identificadores/fechas: CPTIS-2302-2026, 2026-04-12)
+  //  -n11 Use \ldots (placeholders dentro de \comando{...})
+  //  -n12 Interword spacing (falso positivo)
+  //  -n13 Intersentence spacing \@ (falso positivo en abreviaturas)
+  //  -n18 Use `` '' en vez de " (comillas literales en JSON/shell mostrados)
+  //  -n26 Spaces in front of punctuation (rutas/comandos: .env, docker build .)
+  //  -n36 Space in front of parenthesis (código: auth.uid())
+  //  -n44 User Regex (booktabs / reglas verticales: diseño de tablas con color, intencional)
+  "latex-workshop.chktex.args": [
+    "-wall", "-n22", "-n30", "-e16", "-q", "-f%f:%l:%c:%d:%k:%m\n",
+    "-n1", "-n6", "-n8", "-n11", "-n12", "-n13", "-n18", "-n26", "-n36", "-n44"
+  ],
+
   // Configura la compilación automática para que se ejecute al guardar el archivo con Ctrl+S
   "latex-workshop.latex.autoBuild.run": "onSave",
   // Mantiene limpios los subdirectorios de salida después de la compilación
